@@ -1111,6 +1111,22 @@ def _assert_fk(fact: DataFrame, dim: DataFrame,
              "Fact contains a non-UNKNOWN key absent from dimension.",
              "Inspect dimension build and fact lookup logic.")
 
+def _artifact_path_exists(spark: SparkSession, path: str) -> bool:
+    """
+    Check whether a Gold artifact path exists.
+
+    WHY not Path.exists() alone:
+    Path.exists() only understands the local filesystem. On Databricks,
+    Gold paths are abfss:// URIs, so Path.exists() silently returns
+    False for real artifacts and the gate fails spuriously.
+    """
+    try:
+        from pyspark.dbutils import DBUtils
+        DBUtils(spark).fs.ls(path)
+        return True
+    except Exception:
+        return Path(path).exists()
+
 def gold_completion_gate(
         spark: SparkSession,
         df_silver: DataFrame,
@@ -1140,7 +1156,7 @@ def gold_completion_gate(
         f"{root}/model_delay_cost/",
     ]
 
-    missing = [p for p in required_paths if not Path(p).exists()]
+    missing = [p for p in required_paths if not _artifact_path_exists(spark, p)]
     if missing:
         fail(f"Missing Gold artifacts: {missing}", "GCG Check 01",
              "A successful Spark action does not prove artifacts exist.",
