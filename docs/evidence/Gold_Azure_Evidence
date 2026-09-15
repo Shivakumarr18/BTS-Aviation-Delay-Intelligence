@@ -1,0 +1,127 @@
+=================================================================
+  BTS AVIATION DELAY INTELLIGENCE SYSTEM
+  Gold Layer -- Star Schema v3.0
+  Started : 2026-09-13 16:25:28
+=================================================================
+  Grain      : one scheduled flight on one calendar day
+  Dimensions : date, carrier, airport, aircraft, delay_reason
+  Bridge     : one flight -> many BTS delay reasons
+  Boundary   : historical intelligence; no real-time IOC claims
+
+  [16:25:28] INFO  : Spark 3.5.0 ready.
+  [16:26:31] PASS  : Silver pre-check passed: 20,928,599 rows.
+  [16:26:31] INFO  : Phase 1: Building dimensions...
+  [16:28:58] PASS  : Airport business-key contract passed.
+  [16:29:00] INFO  : Phase 1: Writing dimensions...
+  [16:30:24] PASS  : dim_date written -> abfss://bts@btsaviation.dfs.core.windows.net/gold/dim_date/
+  [16:31:44] PASS  : dim_carrier written -> abfss://bts@btsaviation.dfs.core.windows.net/gold/dim_carrier/
+  [16:34:52] PASS  : dim_airport written -> abfss://bts@btsaviation.dfs.core.windows.net/gold/dim_airport/
+  [16:36:14] PASS  : dim_aircraft written -> abfss://bts@btsaviation.dfs.core.windows.net/gold/dim_aircraft/
+  [16:36:23] PASS  : dim_delay_reason written -> abfss://bts@btsaviation.dfs.core.windows.net/gold/dim_delay_reason/
+  [16:36:23] INFO  : Phase 1: All dimensions written. Memory freed.
+  [16:36:23] INFO  : Phase 2: Building fact_delays...
+  [16:36:26] INFO  : Phase 2: Writing fact_delays...
+  [17:26:53] PASS  : fact_delays written -> abfss://bts@btsaviation.dfs.core.windows.net/gold/fact_delays/
+  [17:26:53] INFO  : Phase 2: fact_delays written.
+  [17:26:53] INFO  : Phase 3: Building bridge_flight_delay_reason...
+  [17:26:55] INFO  : Phase 3: Writing bridge...
+  [17:28:54] PASS  : bridge_flight_delay_reason written -> abfss://bts@btsaviation.dfs.core.windows.net/gold/bridge_flight_delay_reason/
+  [17:28:54] INFO  : Phase 3: Bridge written.
+  [17:28:54] INFO  : Phase 4: Building cost scenario and modeled cost...
+  [17:28:55] INFO  : Phase 4: Writing modeled tables...
+  [17:32:47] PASS  : Modeled cost tables written.
+  [17:32:47] INFO  : Phase 4: Modeled tables written.
+  [17:32:47] INFO  : Phase 5: Running Gold Completion Gate...
+
+======================================================================
+  GOLD COMPLETION GATE
+======================================================================
+  [17:32:50] PASS  : GCG 01 -- all required Gold artifacts physically exist.
+  [17:39:00] PASS  : GCG 02 -- fact row reconciliation: 20,928,599.
+  [17:50:19] PASS  : GCG 03 -- fact grain uniqueness passed.
+
+[Cluster restart -- Manual GCG verification run]
+
+============================================================
+MANUAL GOLD COMPLETION GATE
+============================================================
+
+GCG 04 -- NULL foreign keys:
+  NULLs found : {'date_key': 0, 'carrier_key': 0, 'origin_airport_key': 0, 'dest_airport_key': 0, 'aircraft_key': 0}
+  Pass        : True
+
+GCG 05 -- UNKNOWN members:
+  dim_date         : PASS
+  dim_carrier      : PASS
+  dim_airport      : PASS
+  dim_aircraft     : PASS
+  dim_delay_reason : PASS
+
+GCG 06 -- Surrogate key uniqueness:
+  dim_date         : total=1097  distinct=1097  dups=0  PASS
+  dim_carrier      : total=16    distinct=16    dups=0  PASS
+  dim_airport      : total=363   distinct=363   dups=0  PASS
+  dim_aircraft     : total=6685  distinct=6685  dups=0  PASS
+  dim_delay_reason : total=6     distinct=6     dups=0  PASS
+
+GCG 07 -- Partition count:
+  flight_year=2023 : 12 months
+  flight_year=2024 : 12 months
+  flight_year=2025 : 12 months
+  Real partitions  : 36
+  Expected         : 36
+  Pass             : True
+
+GCG 08 -- arr_delay_mins reconciliation:
+  Silver SUM : 152,637,336.00
+  Gold SUM   : 152,637,336.00
+  Match      : True
+
+GCG 09 -- Cancellation count:
+  Silver : 287,134
+  Gold   : 287,134
+  Match  : True
+
+GCG 10 -- Bridge integrity:
+  Bridge rows : 7,072,280
+  Pass        : True
+
+============================================================
+GOLD COMPLETION GATE -- ALL CHECKS
+============================================================
+
+=================================================================
+  BTS AVIATION DELAY INTELLIGENCE SYSTEM
+  GOLD LAYER -- AZURE EVIDENCE
+=================================================================
+  Date        : 2026-09-13
+  Cluster     : Standard_F4, East US, Azure Databricks
+  Storage     : ADLS Gen2, btsaviation, South India
+  Silver input: 20,928,599 rows (Jan 2023 - Dec 2025)
+
+  GOLD ARTIFACTS (9/9):
+  dim_date                   PASS ✅
+  dim_carrier                PASS ✅
+  dim_airport                PASS ✅
+  dim_aircraft               PASS ✅
+  dim_delay_reason           PASS ✅
+  fact_delays                PASS ✅
+  bridge_flight_delay_reason PASS ✅
+  model_cost_scenario        PASS ✅
+  model_delay_cost           PASS ✅
+
+  GOLD COMPLETION GATE (10/10):
+  GCG 01 -- Artifacts exist      : PASS ✅ (9/9)
+  GCG 02 -- Row count            : PASS ✅ (20,928,599)
+  GCG 03 -- Grain uniqueness     : PASS ✅ (0 duplicates)
+  GCG 04 -- NULL foreign keys    : PASS ✅ (all zeros)
+  GCG 05 -- UNKNOWN members      : PASS ✅ (all 5 dims)
+  GCG 06 -- Surrogate key unique : PASS ✅ (all dims)
+  GCG 07 -- Partition count      : PASS ✅ (36/36)
+  GCG 08 -- arr_delay_mins       : PASS ✅ (152,637,336)
+  GCG 09 -- Cancellation count   : PASS ✅ (287,134)
+  GCG 10 -- Bridge integrity     : PASS ✅ (7,072,280 rows)
+
+  STATUS: GOLD LAYER COMPLETE ON AZURE ✅
+  NEXT  : Terminate cluster. Commit evidence.
+=================================================================
