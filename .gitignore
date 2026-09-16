@@ -220,3 +220,7 @@ __marimo__/
 # BTS Raw Data — never commit large CSV files
 data/raw/*.csv
 data/
+
+# Power BI files — too large for git (400MB+ with imported data)
+*.pbix
+reports/powerbi/
