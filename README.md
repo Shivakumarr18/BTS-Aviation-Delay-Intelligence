@@ -22,8 +22,8 @@ An end-to-end aviation data engineering platform built using US Bureau of Transp
 | Azure validation          | ✅ Complete |
 | Semantic / business layer | ✅ Complete |
 | Power BI analytics        | ✅ Complete |
-| REST API                  | 🔲 Planned  |
-| AI Analyst interface      | 🔲 Planned  |
+| REST API                  | ✅ Complete |
+| AI Analyst interface      | ✅ Complete |
 
 ### Data Flow
 
@@ -242,8 +242,8 @@ This prevents analytical assumptions from being presented as source facts.
 | Azure validation          | ✅ Complete |
 | Semantic / business layer | ✅ Complete |
 | Power BI analytics        | ✅ Complete |
-| REST API                  | 🔲 Planned  |
-| AI Analyst interface      | 🔲 Planned  |
+| REST API                  | ✅ Complete |
+| AI Analyst interface      | ✅ Complete |
 
 ### Long-term direction
 
