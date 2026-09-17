@@ -360,10 +360,11 @@
       }
       .dashboard-img {
         width: 100%;
+        height: auto;
         display: none;
-        aspect-ratio: 16/9;
-        object-fit: cover;
-        object-position: top;
+        max-height: 580px;
+        object-fit: contain;
+        background: #0d1117;
       }
       .dashboard-img.active {
         display: block;
