@@ -1,7 +1,6 @@
-fastapi==0.104.1
-uvicorn==0.24.0
-databricks-sdk==0.18.0
-openai==1.3.0
-python-dotenv==1.0.0
-pydantic==2.5.0
-requests==2.31.0
+fastapi
+uvicorn[standard]
+openai
+python-dotenv
+pydantic
+requests
