@@ -372,3 +372,9 @@ GROUP BY o.airport_code, d.airport_code
 HAVING COUNT(*) >= 1000  -- minimum volume threshold
 ORDER BY total_delay_mins DESC
 LIMIT 20;
+
+
+-- Verified against Gold layer: September 17, 2026
+-- Azure Databricks Standard_F4 East US
+-- Queries 1, 2, 3, 6, 7, 9 verified
+-- All numbers reconcile with Power BI dashboards
