@@ -2,15 +2,10 @@
 
 # BTS Aviation Delay Intelligence Platform
 
-**Version:** 0.2
-**Status:** Draft — Pre-Implementation
-**Date:** July 2026
+**Version:** 1.0
+**Status:** Complete — Azure Validated
+**Date:** September 2026
 **Author:** Narsing Shiva Kumar
-
-> Note: This document describes the planned system
-> architecture. Sections marked [PLANNED] will be
-> updated with verified facts after implementation
-> in August–October 2026.
 
 ---
 
@@ -47,12 +42,13 @@ Legality, and Efficiency -- in that exact
 priority order. Every delay cause column
 in BTS maps to one of these pillars.
 CARRIER_DELAY and LATE_AIRCRAFT_DELAY
-map to Efficiency (airline-controllable).
+map to Efficiency (airline-associated).
 WEATHER_DELAY maps to Safety (external).
 NAS_DELAY and SECURITY_DELAY map to
 Legality (regulatory). This mapping
-is what makes this platform operationally
-meaningful -- not just analytically correct.
+is project-defined -- not a BTS or FAA
+classification. It is an analytical
+taxonomy inspired by operational concepts.
 
 ---
 
@@ -76,7 +72,7 @@ meaningful -- not just analytically correct.
 | Source   | US Bureau of Transportation Statistics (BTS TranStats) |
 | Dataset  | On-Time Performance — Reporting Carrier                |
 | Coverage | January 2023 — December 2025 (3 years)                 |
-| Volume   | 20,928,599 rows confirmed across 36 monthly            |
+| Volume   | 20,928,599 rows confirmed across 36 monthly partitions |
 | Format   | CSV, one file per month                                |
 | Columns  | 37 selected from 43+ available                         |
 | Download | transtats.bts.gov                                      |
@@ -85,7 +81,7 @@ meaningful -- not just analytically correct.
 Post-COVID normal operations baseline. All five delay
 cause columns consistently populated. Mature OCC
 reporting standards. Valid year-over-year comparison.
-Pre-2000s data excluded — inconsistent reporting
+Pre-2020 data excluded — inconsistent reporting
 standards and fewer delay cause fields.
 
 ---
@@ -103,75 +99,84 @@ BTS CSV Files (36 files, ~4.5 GB raw)
 │ Partition: year + month │
 │ Format: Parquet │
 │ Idempotency: partition check │
+│ Storage: ADLS Gen2 │
 └─────────────────────────────────────┘
 │
 ▼
 ┌─────────────────────────────────────┐
 │ SILVER LAYER │
 │ PySpark — Validation + Transform │
-│ 6-dimension data quality checks │
+│ 12 validation gates per partition │
 │ NULL preservation enforced │
 │ Deduplication applied │
 │ Pattern: DELETE + INSERT │
 │ Partition: year + month │
 │ Format: Parquet │
+│ Storage: ADLS Gen2 │
 └─────────────────────────────────────┘
 │
 ▼
 ┌─────────────────────────────────────┐
 │ GOLD LAYER │
-│ PySpark → MySQL Star Schema │
+│ PySpark → Kimball Star Schema │
 │ Surrogate key assignment │
 │ Foreign key validation │
-│ Post-join row count checks │
-│ Pattern: INSERT OVERWRITE │
-│ Indexes: all FK columns │
+│ 10-check Gold Completion Gate │
+│ Format: Parquet │
+│ Storage: ADLS Gen2 │
+│ Compute: Azure Databricks │
 └─────────────────────────────────────┘
 │
 ▼
 ┌─────────────────────────────────────┐
-│ CACHE LAYER │
-│ Redis — Cache-Aside pattern │
-│ Heavy Gold aggregations cached │
-│ Invalidated on pipeline refresh │
-│ Expires: daily after pipeline run │
+│ SEMANTIC LAYER │
+│ Business definitions │
+│ Certified measures │
+│ Evidence boundaries │
+│ OBSERVED / DERIVED / MODELED / │
+│ INFERRED / UNKNOWN framework │
 └─────────────────────────────────────┘
 │
 ▼
 ┌─────────────────────────────────────┐
 │ ANALYTICS LAYER │
-│ Power BI Dashboard │
-│ (static assets served via CDN) │
-│ SQL Analytical Queries (6+) │
-│ Cost Sensitivity Calculator │
+│ Power BI — 5 dashboard pages │
+│ Connected via Databricks connector│
+│ Import mode — 20.9M rows │
+└─────────────────────────────────────┘
+│
+▼
+┌─────────────────────────────────────┐
+│ INTELLIGENCE LAYER [PLANNED] │
+│ REST API │
+│ AI Analyst interface │
+│ Text → Semantic → SQL → Evidence │
 └─────────────────────────────────────┘
 
 ### Reliability Layer (across all layers)
 
 - Errors as a UI: every failure says WHAT, WHERE,
   WHY, and HOW TO FIX
-- Pipeline watermark table tracking freshness
-  per layer per partition
-- Health checks on pipeline jobs
-- Late arriving fact detection via watermark
-  comparison (Silver vs Gold per partition)
+- Silver Completion Gate: 12 checks per partition
+- Gold Completion Gate: 10 checks after full run
+- Bronze immutability: append-only, never modified
 
 ---
 
 ## 5. Technology Stack
 
-| Component       | Technology      | Reason                                       |
-| --------------- | --------------- | -------------------------------------------- |
-| Processing      | PySpark 3.5.1   | 18M rows exceeds pandas threshold (~4.5M)    |
-| Storage (raw)   | Parquet         | Columnar, compressed, partition-aware        |
-| Storage (gold)  | MySQL           | Star schema, B-Tree indexes, local available |
-| Cache           | Redis           | Cache-Aside pattern for Gold aggregations    |
-| Dashboard       | Power BI        | Direct connect to MySQL Gold layer           |
-| Language        | Python 3.11     | PySpark, validation logic, pipeline code     |
-| Version control | Git / GitHub    | All code, docs, ADRs versioned               |
-| Environment     | Local (Phase 1) | Validate decisions before cloud migration    |
-| Cloud (Phase 2) | Azure           | ADF → ADLS Gen2 → Synapse → Power BI         |
-|                 |                 | Migration planned: November 2026+            |
+| Component       | Technology            | Reason                                   |
+| --------------- | --------------------- | ---------------------------------------- |
+| Processing      | PySpark 3.5.0         | 20.9M rows exceeds pandas threshold      |
+| Storage (raw)   | ADLS Gen2 · Parquet   | Columnar, compressed, partition-aware    |
+| Storage (gold)  | ADLS Gen2 · Parquet   | Kimball star schema in Parquet format    |
+| Compute         | Azure Databricks      | Managed Spark. Standard_F4. East US.     |
+| Dashboard       | Power BI              | Connected via Databricks connector       |
+| Language        | Python 3.11           | PySpark, validation logic, pipeline code |
+| Version control | Git / GitHub          | All code, docs, ADRs versioned           |
+| Environment     | Local → Azure         | Local development validated before cloud |
+| Orchestration   | Azure Data Factory    | Planned v2                               |
+| Future          | REST API · AI Analyst | Planned after Power BI                   |
 
 ### Confirmed Validation Results
 
@@ -193,54 +198,73 @@ BTS CSV Files (36 files, ~4.5 GB raw)
 | Full NULL profile        | PASS   | All 37 columns profiled        |
 | Total checks             | 12/12  | Zero warnings. Zero failures.  |
 
+---
+
 ## 6. Medallion Architecture
 
 ### Bronze Layer — Raw Ingestion
 
 - Append-only. Raw BTS CSV data. Never modified.
-- Partition: year + month
-- Format: Parquet
+- Partition: YEAR + MONTH
+- Format: Parquet on ADLS Gen2
 - Idempotency: partition existence check before write
-- Schema enforced on read via defined PySpark schema
+- Schema enforced on read via defined PySpark StructType
 - No transformations. No business logic. Data as-is.
+- Status: ✅ COMPLETE — 36/36 partitions. 20,928,599 rows.
 
 ### Silver Layer — Validation + Transformation
 
-- 6-dimension data quality validation gate
+- 12-dimension data quality validation gates per partition
+- Silver Completion Gate after all 36 partitions
 - Type casting (FL_DATE string → DateType,
   ARR_DEL15 double → IntegerType)
-- NULL preservation per documented policy
-- Deduplication on unique flight key
+- NULL preservation per documented policy (ADR-005)
+- Column renaming BTS → business names (ADR-008)
+- FLIGHTS column dropped (ADR-010)
 - Pattern: DELETE partition → INSERT clean records
 - Errors fail loudly with WHAT / WHERE / WHY /
   HOW TO FIX — never silent
+- Status: ✅ COMPLETE — v4.0 FROZEN. 36/36. 20,928,599 rows.
 
 ### Gold Layer — Analytical Model
 
-- Star schema: fact_delays + 5 dimension tables
-- Surrogate key assignment for all dimensions
-- Foreign key validation after joins
-- Post-join row count assertion
-- Pattern: INSERT OVERWRITE per partition
-- B-Tree indexes on all FK columns
+- Kimball Star Schema: fact_delays + 5 dimensions +
+  bridge table + 2 modeled tables
+- Surrogate key assignment (monotonically_increasing_id)
+- Foreign key validation with UNKNOWN member routing
+- 10-check Gold Completion Gate
+- Evidence boundary enforcement: OBSERVED / DERIVED /
+  MODELED / INFERRED / UNKNOWN
+- Status: ✅ COMPLETE — Azure validated September 13, 2026.
+  GCG: 10/10 PASSED.
 
 ---
 
-## 7. Star Schema (Summary)
+## 7. Star Schema
 
 Full design in data_model.md
 
-| Table            | Type      | SCD    | Rows (est.) |
-| ---------------- | --------- | ------ | ----------- |
-| fact_delays      | Fact      | N/A    | ~18M        |
-| dim_carrier      | Dimension | Type 2 | ~30         |
-| dim_airport      | Dimension | Type 2 | ~400        |
-| dim_date         | Dimension | Static | 3,653       |
-| dim_delay_reason | Dimension | Type 1 | 6           |
-| dim_aircraft     | Dimension | Type 4 | ~10,000     |
+| Table                      | Type      | SCD      | Actual Rows |
+| -------------------------- | --------- | -------- | ----------- |
+| fact_delays                | Fact      | N/A      | 20,928,599  |
+| dim_carrier                | Dimension | Snapshot | 16          |
+| dim_airport                | Dimension | Snapshot | 363         |
+| dim_date                   | Dimension | Static   | 1,097       |
+| dim_delay_reason           | Dimension | Type 1   | 6           |
+| dim_aircraft               | Dimension | Snapshot | 6,685       |
+| bridge_flight_delay_reason | Bridge    | N/A      | 7,072,280   |
+| model_cost_scenario        | Modeled   | N/A      | 1           |
+| model_delay_cost           | Modeled   | N/A      | 20,928,599  |
 
-**Grain:** One row = one scheduled flight
-per calendar day
+**Grain:** One row = one scheduled flight per calendar day
+
+**Key GCG results:**
+
+- Grain duplicates: 0
+- NULL foreign keys: 0
+- Arrival delay minutes (Silver = Gold): 152,637,336
+- Cancellations (Silver = Gold): 287,134
+- Bridge rows: 7,072,280
 
 ---
 
@@ -260,10 +284,10 @@ per calendar day
 - Bronze layer is immutable — raw data
   preserved exactly as received from BTS
 - Full data lineage: CSV → Bronze → Silver
-  → Gold → Dashboard
-- pipeline_watermark table tracks freshness
-  per layer per partition
+  → Gold → Semantic Layer → Power BI
 - Every schema decision recorded in ADRs
+- Gold Completion Gate evidence committed
+  to GitHub: docs/evidence/
 
 ### Idempotency
 
@@ -271,7 +295,7 @@ per calendar day
   (skip if already ingested)
 - Silver: DELETE + INSERT
   (safe to rerun — no duplicates)
-- Gold: INSERT OVERWRITE
+- Gold: full overwrite per run
   (safe to rerun — partition replaced)
 - Any layer can be rerun without corrupting
   downstream data
@@ -281,9 +305,7 @@ per calendar day
 - Analytics layer (Gold + Dashboard): AP
   Availability prioritized over strict consistency.
   24-hour batch data — eventual consistency
-  is acceptable. Dashboard may show data from
-  previous pipeline run during refresh.
-  This is known and acceptable behaviour.
+  is acceptable.
 
 - Silver validation layer: CP
   Consistency required. Validation failures
@@ -293,42 +315,14 @@ per calendar day
 
 ### Scalability
 
-**Current scale: 18M rows — local single instance**
-
-Decisions made explicitly at this scale:
-
-Sharding:
-Not implemented. Single MySQL instance
-sufficient at 18M rows.
-Re-evaluate when: dataset exceeds 100M rows
-OR indexed query latency exceeds 2 seconds.
-Future strategy: consistent hashing with
-virtual nodes, shard key FL_DATE + ORIGIN.
-
-Read Replica:
-Not implemented locally. Single user,
-no concurrent read pressure.
-Re-evaluate when: multiple concurrent
-dashboard users OR pipeline writes visibly
-impact dashboard read performance.
-Future: one replica for dashboard reads,
-primary for pipeline writes only.
+**Current scale: 20.9M rows — Azure Databricks Standard_F4**
 
 Partitioning:
-Partition by year + month = 36 partitions,
-~500K rows each.
+Partition by year + month = 36 partitions.
 Enables partition pruning — queries scan
-only relevant months, not full 18M rows.
-Estimated 30x speedup on time-filtered queries.
-Idempotency: reprocess one month = delete
-one partition, rerun, rewrite.
+only relevant months, not full 20.9M rows.
 
-### Availability
-
-- Local pipeline: no HA requirements in Phase 1
-- Future cloud architecture:
-  Active-Passive failover for pipeline orchestrator
-  ensures no missed daily runs during failover
+Future scaling decisions documented in ADRs.
 
 ---
 
@@ -338,39 +332,31 @@ one partition, rerun, rewrite.
 
 **Rule 1 — Delay cause NULL preservation (CRITICAL):**
 When ARR_DEL15 = 0, all five delay cause columns
-MUST be NULL.
-Validated on Q1 2024: 1,658,259 rows, 0 violations.
-This is correct behaviour — 80.1% of flights are
-on time and have no delay cause to report.
-These NULLs must NEVER be replaced with 0.
+MUST be NULL. Validated across 20,928,599 rows.
+0 violations. These NULLs must NEVER be replaced with 0.
 
 **Rule 2 — ARR_DELAY NULL conditions:**
 ARR_DELAY is NULL when CANCELLED = 1 OR DIVERTED = 1.
 A cancelled flight never arrived.
-A diverted flight arrived at a different airport.
-Neither can have a meaningful arrival delay.
 Preserve NULL. Never substitute 0.
 
 **Rule 3 — CANCELLATION_CODE conditions:**
 CANCELLATION_CODE is NULL when CANCELLED = 0.
-It is populated (A/B/C/D) only when CANCELLED = 1.
 A = Carrier, B = Weather, C = NAS, D = Security.
 
 **Rule 4 — Uniqueness:**
 Each flight on each date must appear exactly once.
 Unique key: FL_DATE + OP_UNIQUE_CARRIER +
 OP_CARRIER_FL_NUM + ORIGIN + DEST.
-Duplicates deduplicated in Silver layer.
+GCG 03: 0 grain duplicates confirmed.
 
 **Rule 5 — Completeness:**
-Core identity columns (YEAR, MONTH, ORIGIN, DEST,
-OP_UNIQUE_CARRIER) must never be NULL.
-Row count per month must exceed 400,000.
-Any violation fails the Silver gate loudly.
+Core identity columns must never be NULL.
+GCG 04: 0 NULL foreign keys confirmed.
 
 ### Silver Validation Gate
 
-All five rules checked in Silver layer.
+12 checks per partition. Silver Completion Gate after all 36.
 Any violation raises a structured error:
 [ERROR_TYPE] | Layer | Rule | Violations found |
 Expected | Likely cause | Recommended action.
@@ -382,47 +368,44 @@ Pipeline halts. Gold layer never receives bad data.
 
 ### Approach
 
-The system provides operational cost context
-using real delay patterns + user-supplied
-cost assumptions.
+MODELED financial exposure using observed delay
+patterns + external cost assumption.
 
 **Formula:**
 Estimated Cost Exposure =
-Total Delayed Minutes (from Gold layer) ×
-Cost Per Delay Minute (user input)
+Total Positive Arrival Delay Minutes (OBSERVED from Gold) ×
+$45 per delay minute (MODELED — Ferguson et al.)
 
 ### Citation
 
-Industry cost benchmarks sourced from:
 Ferguson, J. et al. — "Total Delay Impact Study"
-(FAA/NEXTOR, 2010). Figures used as directional
-indicators only. Users supply their own
-cost-per-minute assumptions.
+(FAA/NEXTOR, 2010).
+$45/min used as directional reference only.
+Not actual airline accounting cost.
 
 ### Honesty Principle
 
-> This system never fabricates cost numbers.
-> All estimates are clearly labelled as estimates.
-> Users input their own cost assumptions.
-> The system provides the delay data.
-> The interpretation is theirs.
+> All cost estimates are MODELED.
+> Always labeled as estimates, never as observed costs.
+> Separate modeled tables (ADR-GOLD-005) enforce
+> the observed ≠ modeled boundary structurally.
 
 ---
 
 ## 11. What This System Does
 
 - Ingests 3 years of US domestic flight delay data
-- Validates data quality across 6 dimensions
+- Validates data quality across 12 dimensions per partition
 - Preserves all NULL values with documented reasoning
-- Builds a star schema analytical model
+- Builds a Kimball star schema analytical model on Azure
 - Surfaces delay patterns by carrier, airport,
   route, time, and delay cause
 - Provides cost exposure estimates using
-  real delay patterns and user-supplied cost rates
-- Tracks Late Aircraft cascade effect
-  using TAIL_NUM across a single day
+  real delay patterns and Ferguson et al. assumption
 - Maps delay causes to IOC operational pillars
-  (Safety, Legality, Efficiency)
+  (project-defined: Safety, Legality, Efficiency)
+- Delivers 5 Power BI dashboard pages with
+  explicit evidence boundaries
 
 ---
 
@@ -434,37 +417,49 @@ cost-per-minute assumptions.
 - Does not ingest real-time data (batch only, v1)
 - Does not store personally identifiable information
 - Does not fabricate or impute missing delay values
-- Does not provide legal or regulatory compliance advice
-- Does not guarantee cost estimates are exact
+- Does not present modeled costs as observed airline loss
+- Does not claim IOC pillar mapping is a BTS classification
 
 ---
 
-## 13. Future Architecture
+## 13. Completed Milestones
 
-### Phase 2 — Cloud Migration (November 2026+)
+| Milestone            | Date               | Evidence                          |
+| -------------------- | ------------------ | --------------------------------- |
+| Bronze complete      | August 2026        | 36/36 partitions. 20,928,599 rows |
+| Silver v4.0 frozen   | August 2026        | 36/36. 12 gates. Brother: 9.5/10  |
+| Gold local TEST_MODE | August 2026        | 8/8 TCG. Stratified 100K sample   |
+| Gold Azure complete  | September 13, 2026 | GCG 10/10. Azure Databricks.      |
+| Semantic Layer v1.0  | September 15, 2026 | Code-verified. Brother: 9.2/10    |
+| Power BI — 5 pages   | September 17, 2026 | Innovate theme. DAX certified.    |
 
-ADF (ingestion)
-↓
-ADLS Gen2
-├── bronze/
-├── silver/
-└── gold/
-↓
-Synapse Spark (PySpark transforms)
-↓
-Synapse SQL (analytical queries)
-↓
-Power BI (DirectQuery dashboard)
+---
 
-## 14. Repository Structure
+## 14. Planned Next Steps
+
+| Stage                | Status     |
+| -------------------- | ---------- |
+| REST API             | 🔲 Planned |
+| AI Analyst interface | 🔲 Planned |
+| Azure Data Factory   | 🔲 Planned |
+| CI/CD pipeline       | 🔲 Planned |
+
+---
+
+## 15. Repository Structure
 
 BTS-Aviation-Delay-Intelligence/
 │
-├── README.md ← Product brief
+├── README.md
 │
 ├── docs/
-│ ├── HLD.md ← High Level Design
-│ ├── data_model.md ← Star schema design
+│ ├── HLD.md
+│ ├── data_model.md
+│ ├── ai_response_contract.md
+│ ├── evidence/
+│ │ └── gold_azure_evidence_2026_09_13.txt
+│ ├── semantic/
+│ │ └── BTS_SemanticLayer_v1_CodeVerified.docx
 │ └── decisions/
 │ ├── ADR-001-surrogate-keys.md
 │ ├── ADR-002-star-schema.md
@@ -472,10 +467,13 @@ BTS-Aviation-Delay-Intelligence/
 │ ├── ADR-004-airport-domain-columns.md
 │ ├── ADR-005-null-preservation.md
 │ ├── ADR-006-ioc-pillar-mapping.md
-│ └── ADR-007-scd-type4-aircraft.md
+│ ├── ADR-007-scd-type4-aircraft.md
+│ ├── ADR-008-column-renaming-strategy.md
+│ ├── ADR-009-parquet-over-csv.md
+│ └── ADR-010-flights-column-dropped.md
 │
 ├── governance/
-│ └── data_principles.md ← Engineering principles
+│ └── data_principles.md
 │
 ├── pipeline/
 │ ├── bronze/
@@ -485,30 +483,22 @@ BTS-Aviation-Delay-Intelligence/
 │ └── gold/
 │ └── gold_star_schema.py
 │
-├── analysis/
-│ └── gold_analytics.sql ← 6+ analytical queries
-│
-├── interface/
-│ └── bts_assistant.py ← Cost Sensitivity Calculator
-│
-├── tests/
-│ ├── test_schema.py
-│ ├── test_row_counts.py
-│ └── test_null_rules.py
+├── reports/
+│ ├── screenshots/
+│ └── powerbi/
 │
 ├── config/
-│ └── pipeline_config.py ← Paths, thresholds, settings
+│ └── pipeline_config.py
 │
 ├── data/
 │ └── raw/ ← gitignored
 │
 ├── .gitignore
-├── README.md
 └── requirements.txt
 
 ---
 
-## 15. Engineering Principles
+## 16. Engineering Principles
 
 1. **Errors as a UI** — every failure explains
    WHAT broke, WHERE, WHY, and HOW TO FIX.
@@ -534,14 +524,20 @@ BTS-Aviation-Delay-Intelligence/
    what the system does and does not do.
    No inflated claims. No fabricated metrics.
 
-## 16. Platform Boundaries -- What This System Is and Is Not
+7. **Evidence over adjectives** — every claim is
+   classified as OBSERVED, DERIVED, MODELED,
+   INFERRED, or UNKNOWN. Never assume.
+
+---
+
+## 17. Platform Boundaries
 
 ### What This Platform Demonstrates
 
 - Historical delay patterns (2023-2025)
 - Operational relationships between
   carriers, airports, routes, and aircraft
-- Delay-driver analysis by IOC pillar
+- Delay-driver analysis by IOC pillar (project-defined)
 - Aircraft delay-propagation patterns
   via tail number tracking
 - Historical decision-support intelligence
@@ -553,6 +549,7 @@ BTS-Aviation-Delay-Intelligence/
 - Live aircraft or maintenance status
 - Live weather or ATC constraint handling
 - Passenger connection impact analysis
+- Causal claims beyond BTS reported attribution
 
 ### The Honest Positioning
 
@@ -566,9 +563,8 @@ airline operational control system.
 
 ---
 
-> Version 0.2 — Draft Pre-Implementation
-> All major decisions tracked through ADRs.
-> This document will be updated to Version 1.0
-> after Gold layer implementation (August–September 2026)
-> and Version 2.0 after validation and performance
-> proof (October 2026).
+> Version 1.0 — Azure Validated — September 2026
+> Gold layer complete: September 13, 2026
+> Power BI complete: September 17, 2026
+> Semantic Layer v1.0 complete: September 15, 2026
+> Next: REST API → AI Analyst interface
