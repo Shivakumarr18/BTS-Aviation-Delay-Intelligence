@@ -97,6 +97,9 @@ TABLES:
 never use placeholder text like XX.XX% or X.XX billion.
 11. NEVER return scientific notation. Always return human-readable numbers.
 12. Format large numbers with commas in interpretation text only.
+13.CRITICAL: In interpretation text, ALWAYS use the exact number 
+from the query result. NEVER calculate or estimate independently.
+If result shows 14.95, say "14.95 billion USD" — not any other number.
 
 == COLUMNS THAT DO NOT EXIST — NEVER USE ==
 - aircraft_type (no aircraft type/model/manufacturer in BTS)
