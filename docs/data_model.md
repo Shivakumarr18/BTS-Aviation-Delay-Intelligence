@@ -2,13 +2,8 @@
 
 **Project:** BTS Aviation Delay Intelligence Platform
 
-Version: 0.2 | Status: Draft — Pre-Implementation
-Last updated: July 2026
-
-Note: This document describes the planned logical
-data model. Sections marked [PLANNED] will be
-updated with verified facts after Gold layer
-implementation in August-September 2026.
+Version: 1.0 | Status: Complete — Azure Validated
+Last updated: September 2026
 
 ---
 
@@ -18,11 +13,10 @@ This document describes the logical data model for the
 BTS Aviation Delay Intelligence Platform.
 
 It defines the analytical grain, fact and dimension tables,
-SCD type decisions, NULL handling rules, index strategy,
-and key modeling decisions used to build the Gold layer.
+SCD type decisions, NULL handling rules, and key modeling
+decisions used to build the Gold layer.
 
-This document will evolve as the Gold layer is implemented.
-Major modeling decisions are documented through ADRs.
+All decisions are documented through ADRs in docs/decisions/.
 
 ---
 
@@ -40,13 +34,9 @@ Major modeling decisions are documented through ADRs.
 - Same flight number, different date = always different rows
 - One flight with one origin and one destination per row
 
-**Why this grain:**
-
-- Matches BTS data structure exactly
-- Enables route-level, carrier-level, and
-  time-series analysis
-- Cannot go more atomic without segment-level
-  data not available in BTS
+**Grain key (verified GCG 03 — 0 duplicates):**
+flight_date + carrier_code + flight_number +
+origin_airport + dest_airport
 
 ---
 
@@ -59,509 +49,416 @@ Major modeling decisions are documented through ADRs.
 dim_carrier ──── fact_delays ──── dim_airport (Origin)
                        │    ──── dim_airport (Destination)
                        │
-              dim_delay_reason
+                  dim_aircraft
                        │
-              dim_aircraft
+              bridge_flight_delay_reason
+                       │
+              dim_delay_reason
+
+Separate modeled layer:
+fact_delays ──── model_delay_cost ──── model_cost_scenario
 ```
 
 **Notes:**
 
 - dim_airport appears TWICE in fact_delays
-  (origin_key and dest_key) — conformed dimension
-- dim_date is conformed across all future fact tables
-- dim_aircraft tracks tail number across flights
-  (critical for Late Aircraft cascade analysis)
+  (origin_airport_key and dest_airport_key)
+  Conformed dimension — role-playing (ADR-002)
+- fact_delays has NO delay_reason_key
+  Multi-cause delays handled via bridge table (ADR-002)
+- Cost model is separate from fact (ADR-GOLD-005)
+  Observed delay minutes ≠ modeled financial exposure
 
 ---
 
 ## 4. SCD Type Decisions
 
-| Dimension        | SCD Type | Reason                                      |
-| ---------------- | -------- | ------------------------------------------- |
-| dim_carrier      | Type 2   | Carrier names and hubs change (mergers)     |
-| dim_airport      | Type 2   | Hub status and city classification changes  |
-| dim_date         | Static   | Calendar dates never change                 |
-| dim_delay_reason | Type 1   | BTS delay categories are stable definitions |
-| dim_aircraft     | Type 4   | Tail numbers change registration frequently |
+| Dimension        | v1 Decision | Reason                                       |
+| ---------------- | ----------- | -------------------------------------------- |
+| dim_carrier      | Snapshot    | BTS has no attribute change events (ADR-003) |
+| dim_airport      | Snapshot    | BTS has no attribute change events (ADR-003) |
+| dim_date         | Static      | Calendar dates never change                  |
+| dim_delay_reason | Type 1      | BTS delay categories are stable definitions  |
+| dim_aircraft     | Snapshot    | Tail number only. No change history in BTS.  |
 
-**SCD Type 2 extra columns (dim_carrier, dim_airport):**
-
-- effective_from DATE NOT NULL
-- effective_to DATE NOT NULL (9999-12-31 = currently active)
-- is_current TINYINT NOT NULL (1 = current, 0 = historical)
-
-**SCD Type 4 (dim_aircraft):**
-
-- Current table holds one row per tail number (latest config)
-- History table holds all versions over time
-- Queried separately depending on need
+**Note on SCD2:**
+SCD2 was deliberately deferred to Azure v2.
+BTS does not provide attribute change events.
+Claiming SCD2 without version detection is
+architecturally dishonest. See ADR-003.
 
 ---
 
 ## 5. Fact Table — fact_delays
 
 **Grain:** One scheduled flight per calendar day
-**Rows:** Rows (confirmed) → 20,928,599
-**Partitioned by:** year + month (36 partitions)
+**Rows:** 20,928,599 (verified GCG 02)
+**Partitioned by:** flight_year + flight_month (36 partitions)
+**Format:** Parquet on ADLS Gen2
 
-| Column              | Type      | Source              | Notes                                                |
-| ------------------- | --------- | ------------------- | ---------------------------------------------------- |
-| date_key            | INT       | Generated           | FK → dim_date.date_key                               |
-| carrier_key         | INT       | Generated           | FK → dim_carrier.carrier_key (SCD Type 2)            |
-| origin_key          | INT       | Generated           | FK → dim_airport.airport_key                         |
-| dest_key            | INT       | Generated           | FK → dim_airport.airport_key                         |
-| aircraft_key        | INT       | Generated           | FK → dim_aircraft.aircraft_key (-1 = Unknown)        |
-| delay_reason_key    | INT       | Generated           | FK → dim_delay_reason.reason_key (-1 = No Delay)     |
-| fl_date             | DATE      | FL_DATE             | Actual flight date. Used for partition pruning       |
-| flight_number       | VARCHAR   | OP_CARRIER_FL_NUM   | Natural identifier. Kept for traceability            |
-| crs_dep_time        | INT       | CRS_DEP_TIME        | Scheduled departure (HHMM format)                    |
-| dep_time            | INT       | DEP_TIME            | Actual departure. NULL if cancelled                  |
-| dep_delay           | DOUBLE    | DEP_DELAY           | Minutes early (negative) or late. NULL if cancelled  |
-| dep_delay_minutes   | DOUBLE    | DEP_DELAY_NEW       | Absolute delay. 0 if early. NULL if cancelled        |
-| dep_del15           | TINYINT   | DEP_DEL15           | 1 = delayed 15+ mins. 0 = on time. NULL if cancelled |
-| crs_arr_time        | INT       | CRS_ARR_TIME        | Scheduled arrival (HHMM format)                      |
-| arr_time            | INT       | ARR_TIME            | Actual arrival. NULL if cancelled or diverted        |
-| arr_delay           | DOUBLE    | ARR_DELAY           | Minutes early or late. NULL if cancelled             |
-| arr_delay_minutes   | DOUBLE    | ARR_DELAY_NEW       | Absolute delay. 0 if early. NULL if cancelled        |
-| arr_del15           | TINYINT   | ARR_DEL15           | 1 = delayed 15+ mins. 0 = on time. ← CRITICAL        |
-| cancelled           | TINYINT   | CANCELLED           | 1 = cancelled. 0 = operated                          |
-| cancellation_code   | VARCHAR   | CANCELLATION_CODE   | A/B/C/D or NULL when not cancelled                   |
-| diverted            | TINYINT   | DIVERTED            | 1 = diverted. 0 = not diverted                       |
-| crs_elapsed_time    | DOUBLE    | CRS_ELAPSED_TIME    | Scheduled duration (minutes)                         |
-| actual_elapsed_time | DOUBLE    | ACTUAL_ELAPSED_TIME | Actual duration. NULL if cancelled                   |
-| air_time            | DOUBLE    | AIR_TIME            | Wheels off to wheels on. NULL if cancelled           |
-| distance            | DOUBLE    | DISTANCE            | Route distance in miles. Never NULL                  |
-| carrier_delay       | DOUBLE    | CARRIER_DELAY       | NULL when arr_del15 = 0. Expected 80.1% NULL         |
-| weather_delay       | DOUBLE    | WEATHER_DELAY       | NULL when arr_del15 = 0. Expected 80.1% NULL         |
-| nas_delay           | DOUBLE    | NAS_DELAY           | NULL when arr_del15 = 0. Expected 80.1% NULL         |
-| security_delay      | DOUBLE    | SECURITY_DELAY      | NULL when arr_del15 = 0. Expected 80.1% NULL         |
-| late_aircraft_delay | DOUBLE    | LATE_AIRCRAFT_DELAY | NULL when arr_del15 = 0. Expected 80.1% NULL         |
-| pipeline_load_dt    | TIMESTAMP | Pipeline            | When row was loaded. Used for watermark tracking     |
-| ioc_pillar_primary  | VARCHAR   | Derived             | Primary IOC pillar of the delay.                     |
-
-                                                          Safety / Legality / Efficiency / None.
-                                                          Derived from dominant delay cause column.
-                                                          Enables direct IOC pillar aggregations
-                                                          without CASE WHEN on every query.                     |
+| Column                         | Type      | Evidence  | Notes                                                |
+| ------------------------------ | --------- | --------- | ---------------------------------------------------- |
+| flight_id                      | string    | OBSERVED  | Composite grain key. monotonically_increasing_id()   |
+| date_key                       | integer   | OBSERVED  | FK → dim_date.date_key (YYYYMMDD format)             |
+| carrier_key                    | long      | OBSERVED  | FK → dim_carrier.carrier_key                         |
+| origin_airport_key             | long      | OBSERVED  | FK → dim_airport.airport_key (origin role)           |
+| dest_airport_key               | long      | OBSERVED  | FK → dim_airport.airport_key (destination role)      |
+| aircraft_key                   | long      | OBSERVED  | FK → dim_aircraft.aircraft_key (-1 = Unknown)        |
+| flight_date                    | date      | OBSERVED  | Calendar date of scheduled flight                    |
+| carrier_code                   | string    | OBSERVED  | IATA carrier code. Denormalized.                     |
+| flight_number                  | integer   | OBSERVED  | Carrier-assigned flight number                       |
+| origin_airport                 | string    | OBSERVED  | Origin IATA code. Denormalized.                      |
+| dest_airport                   | string    | OBSERVED  | Destination IATA code. Denormalized.                 |
+| tail_number                    | string    | OBSERVED  | Aircraft registration. NULL for 48,139 flights.      |
+| arr_delayed_flag               | integer   | OBSERVED  | 1=delayed. 0=not delayed. NULL=cancelled.            |
+| dep_delayed_flag               | integer   | OBSERVED  | 1=delayed. 0=not delayed. NULL=cancelled.            |
+| is_cancelled                   | integer   | OBSERVED  | 1=cancelled. 0=operated.                             |
+| is_diverted                    | integer   | OBSERVED  | 1=diverted to different airport.                     |
+| arr_delay_mins                 | double    | OBSERVED  | Signed. Negative=early. NULL=cancelled.              |
+| dep_delay_mins                 | double    | OBSERVED  | Signed. Negative=early. NULL=cancelled.              |
+| arr_delay_abs_mins             | double    | DERIVED   | ABS(arr_delay_mins). Used in cost model only.        |
+| dep_delay_abs_mins             | double    | DERIVED   | ABS(dep_delay_mins). Magnitude only.                 |
+| carrier_delay_mins             | double    | OBSERVED  | BTS-reported. NULL≠zero. Carrier self-reporting.     |
+| weather_delay_mins             | double    | OBSERVED  | BTS-reported. NULL≠zero.                             |
+| nas_delay_mins                 | double    | OBSERVED  | BTS-reported. NULL≠zero.                             |
+| security_delay_mins            | double    | OBSERVED  | BTS-reported. NULL≠zero.                             |
+| late_aircraft_delay_mins       | double    | OBSERVED  | BTS-reported. NULL≠zero. Propagation indicator.      |
+| efficiency_attributed_mins     | double    | DERIVED   | carrier_delay_mins + late_aircraft_delay_mins        |
+| safety_attributed_mins         | double    | DERIVED   | weather_delay_mins. Project IOC mapping.             |
+| legality_attributed_mins       | double    | DERIVED   | nas_delay_mins + security_delay_mins.                |
+| dominant_delay_pillar          | string    | DERIVED   | Safety/Legality/Efficiency/None. Project-defined.    |
+| dominant_pillar_tie            | boolean   | DERIVED   | True if ≥2 pillars tied for max minutes.             |
+| operational_influence_class    | string    | DERIVED   | INTERNAL/EXTERNAL/MIXED/UNKNOWN. Not controllable.   |
+| dominant_influence_class       | string    | DERIVED   | Dominant influence when internal≠external.           |
+| has_mixed_influence            | boolean   | DERIVED   | True when both internal and external present.        |
+| cancellation_code              | string    | OBSERVED  | A=Carrier B=Weather C=NAS D=Security. NULL if not.   |
+| cancellation_pillar            | string    | DERIVED   | IOC pillar from cancellation_code. Project-defined.  |
+| scheduled_elapsed_mins         | double    | OBSERVED  | Scheduled flight duration in minutes.                |
+| actual_elapsed_mins            | double    | OBSERVED  | Actual flight duration. NULL if cancelled.           |
+| schedule_elapsed_variance_mins | double    | DERIVED   | scheduled - actual. Positive=shorter than scheduled. |
+| air_time_mins                  | double    | OBSERVED  | Wheels-off to wheels-on. Excludes taxi.              |
+| distance_miles                 | double    | OBSERVED  | Route distance in statute miles.                     |
+| silver_processed_ts            | timestamp | TECHNICAL | Pipeline metadata. Do not expose in BI or AI.        |
+| gold_processed_ts              | timestamp | TECHNICAL | Pipeline metadata. Do not expose in BI or AI.        |
+| flight_year                    | integer   | TECHNICAL | Partition column. Use dim_date.year for analysis.    |
+| flight_month                   | integer   | TECHNICAL | Partition column. Use dim_date.month for analysis.   |
 
 **Critical business rule:**
 
-> When arr_del15 = 0, all five delay cause columns
-> MUST be NULL. Validated on Q1 2024: 0 violations
-> across 1,658,259 rows. This is correct behaviour —
-> not dirty data. Never fill with 0.
+> When arr_delayed_flag = 0, all five delay cause columns
+> MUST be NULL. Validated across 20,928,599 rows: 0 violations.
+> NULL means BTS did not report a cause. NOT the same as zero.
+> Never fill delay cause NULLs with zero. See ADR-005.
 
 ---
 
 ## 6. Dimension Tables
 
-### dim_carrier (SCD Type 2)
+### dim_carrier (Snapshot v1)
 
-| Column         | Type    | Notes                                            |
-| -------------- | ------- | ------------------------------------------------ |
-| carrier_key    | INT     | Surrogate PK (auto-increment)                    |
-| carrier_code   | VARCHAR | IATA 2-letter code e.g. "AA". Natural key stored |
-| carrier_name   | VARCHAR | Full airline name                                |
-| carrier_type   | VARCHAR | "Legacy", "LCC", "Regional"                      |
-|                |         | Enables hub vs LCC cascade analysis              |
-|                |         | (Chapter 3: same delay code, different story)    |
-| hub_airport    | VARCHAR | Primary hub IATA code                            |
-| effective_from | DATE    | SCD Type 2 — version start date                  |
-| effective_to   | DATE    | SCD Type 2 — 9999-12-31 = currently active       |
-| is_current     | TINYINT | 1 = current version, 0 = historical              |
+| Column            | Type      | Notes                                       |
+| ----------------- | --------- | ------------------------------------------- |
+| carrier_key       | long      | Surrogate PK. monotonically_increasing_id() |
+| carrier_code      | string    | IATA 2-letter code e.g. "AA"                |
+| carrier_name      | string    | Full airline name                           |
+| record_type       | string    | SNAPSHOT_V1 or UNKNOWN_MEMBER               |
+| is_current        | boolean   | Always true in v1. SCD2 deferred.           |
+| gold_processed_ts | timestamp | Pipeline metadata                           |
 
-**Index:** carrier_code, is_current
+**Rows:** 16 (15 real carriers + 1 UNKNOWN member)
+**UNKNOWN member:** carrier_key = -1
 
 ---
 
-### dim_airport (SCD Type 2, Conformed)
+### dim_airport (Snapshot v1 — Conformed)
 
-| Column           | Type    | Notes                                        |
-| ---------------- | ------- | -------------------------------------------- |
-| airport_key      | INT     | Surrogate PK                                 |
-| airport_code     | VARCHAR | IATA 3-letter code e.g. "HYD". Natural key   |
-| airport_name     | VARCHAR | Full airport name                            |
-| city_name        | VARCHAR | City                                         |
-| state_code       | VARCHAR | 2-letter state code                          |
-| state_name       | VARCHAR | Full state name                              |
-| latitude         | DECIMAL | Geographic coordinate                        |
-| longitude        | DECIMAL | Geographic coordinate                        |
-| elevation_ft     | INT     | Altitude above sea level in feet             |
-|                  |         | Chapter 3: DEN at 5,400ft reduces engine     |
-|                  |         | performance → higher CARRIER_DELAY in summer |
-| slot_coordinated | TINYINT | 1 = IATA Level 3 slot airport                |
-|                  |         | Chapter 3: JFK, LAX, ORD — IOC obsessed with |
-|                  |         | slot compliance. Missing slot = NAS_DELAY    |
-| has_curfew       | TINYINT | 1 = nighttime curfew applies                 |
-|                  |         | Chapter 3: IOC cancels late flights rather   |
-|                  |         | than risk curfew violation → CANCELLED=1     |
-|                  |         | Pattern: late evening cancellations at JFK   |
-| effective_from   | DATE    | SCD Type 2                                   |
-| effective_to     | DATE    | SCD Type 2 — 9999-12-31 = currently active   |
-| is_current       | TINYINT | 1 = current version, 0 = historical          |
+| Column            | Type      | Notes                              |
+| ----------------- | --------- | ---------------------------------- |
+| airport_key       | long      | Surrogate PK                       |
+| airport_code      | string    | IATA 3-letter code e.g. "ATL"      |
+| city              | string    | City + state label from BTS source |
+| state             | string    | 2-letter state code                |
+| record_type       | string    | SNAPSHOT_V1 or UNKNOWN_MEMBER      |
+| is_current        | boolean   | Always true in v1. SCD2 deferred.  |
+| gold_processed_ts | timestamp | Pipeline metadata                  |
 
-**Index:** airport_code, is_current
+**Rows:** 363 (362 real airports + 1 UNKNOWN member)
+**UNKNOWN member:** airport_key = -1
+**Role-playing:** Used twice in fact_delays as
+origin_airport_key and dest_airport_key.
 
-**Note on aviation domain columns:**
-
-> elevation_ft, slot_coordinated, has_curfew are NOT
-> in BTS source data. They are enriched from public
-> airport databases. These columns exist because of
-> domain knowledge from Peter J. Bruce's Airline
-> Operations Control — Chapter 3 directly informed
-> this schema design decision.
+**Note on v1 scope:**
+No airport_name column in v1. BTS source provides
+city and state only. No invented enrichment data.
+See ADR-004. FAA enrichment planned for v2.
 
 ---
 
-### dim_date (Static — never changes)
+### dim_date (Static)
 
-| Column        | Type    | Notes                                        |
-| ------------- | ------- | -------------------------------------------- |
-| date_key      | INT     | Surrogate PK. Format: YYYYMMDD e.g. 20240115 |
-| full_date     | DATE    | Calendar date                                |
-| year          | INT     | Calendar year                                |
-| quarter       | INT     | 1–4                                          |
-| month         | INT     | 1–12                                         |
-| month_name    | VARCHAR | "January", "February" etc.                   |
-| day_of_month  | INT     | 1–31                                         |
-| day_of_week   | INT     | 1 = Monday, 7 = Sunday                       |
-| day_name      | VARCHAR | "Monday", "Tuesday" etc.                     |
-| is_weekend    | TINYINT | 1 = Saturday or Sunday, 0 = weekday          |
-| is_us_holiday | TINYINT | 1 = US federal holiday or peak travel day    |
-|               |         | Thanksgiving, Christmas = peak delays        |
-| season        | VARCHAR | "Winter", "Spring", "Summer", "Fall"         |
-| week_of_year  | INT     | 1–53                                         |
+| Column                | Type      | Notes                                          |
+| --------------------- | --------- | ---------------------------------------------- |
+| date_key              | integer   | YYYYMMDD format e.g. 20240115                  |
+| full_date             | date      | Calendar date                                  |
+| year                  | integer   | Calendar year                                  |
+| quarter               | integer   | 1–4                                            |
+| month                 | integer   | 1–12                                           |
+| month_name            | string    | January–December                               |
+| day_of_month          | integer   | 1–31                                           |
+| day_of_week           | integer   | 1=Sunday 7=Saturday (Spark F.dayofweek)        |
+| day_name              | string    | Sunday–Saturday                                |
+| is_weekend            | boolean   | True when day_of_week IN (1,7)                 |
+| season                | string    | Winter/Spring/Summer/Fall                      |
+| holiday_travel_window | string    | Approximate travel windows. NULL = other days. |
+| record_type           | string    | STATIC or UNKNOWN_MEMBER                       |
+| gold_processed_ts     | timestamp | Pipeline metadata                              |
 
-**Population:**
+**Rows:** 1,097 (Jan 2023 – Dec 2025 + 1 UNKNOWN member)
 
-> Generate once: 2020-01-01 to 2030-12-31 = 3,653 rows.
-> Load once. Never update. Never delete.
+**holiday_travel_window values (verified from code):**
 
-**Why pre-compute these attributes:**
+- Thanksgiving: Nov 20-30
+- Christmas: Dec 20-31
+- New Year: Jan 1-3
+- July 4th: Jul 1-7
+- Labor Day: Sep 1-7
+- Memorial Day: May 24-31
+- NULL = all other dates
 
-> "Show delays by day of week" without dim_date requires
-> EXTRACT(DOW FROM fl_date) computed across 18M rows
-> at query time — expensive. With dim_date: join on
-> date_key, filter day_of_week = 1 — milliseconds.
+**day_of_week encoding (verified from code):**
+Spark F.dayofweek() default.
+1=Sunday, 2=Monday … 7=Saturday.
+is_weekend = isin(1,7) confirms Sunday=1, Saturday=7.
 
 ---
 
 ### dim_delay_reason (SCD Type 1)
 
-| Column               | Type    | Notes                                                                                                   |
-| -------------------- | ------- | ------------------------------------------------------------------------------------------------------- |
-| reason_key           | INT     | Surrogate PK (-1 = No Delay)                                                                            |
-| reason_code          | VARCHAR | BTS delay code (CARRIER_DELAY, WEATHER_DELAY, NAS_DELAY, SECURITY_DELAY, LATE_AIRCRAFT_DELAY, NO_DELAY) |
-| reason_name          | VARCHAR | Human-readable delay category                                                                           |
-| ioc_pillar           | VARCHAR | IOC operational pillar: Safety, Legality, Efficiency, or N/A                                            |
-| airline_controllable | BOOLEAN | 1 = airline-controlled, 0 = external factor                                                             |
-| description          | VARCHAR | Operational explanation of the delay                                                                    |
+| Column                      | Type      | Notes                                       |
+| --------------------------- | --------- | ------------------------------------------- |
+| delay_reason_key            | integer   | Hardcoded: 1-5 + UNKNOWN=-1                 |
+| delay_code                  | string    | BTS category code                           |
+| delay_category              | string    | BTS category name                           |
+| ioc_pillar                  | string    | Project-defined: Safety/Legality/Efficiency |
+| operational_influence_class | string    | Project-defined: INTERNAL/EXTERNAL/UNKNOWN  |
+| bts_source_column           | string    | Source BTS column name                      |
+| record_type                 | string    | TYPE1_LOOKUP or UNKNOWN_MEMBER              |
+| gold_processed_ts           | timestamp | Pipeline metadata                           |
 
-### Business Mapping
+**Rows:** 6 (5 BTS codes + 1 UNKNOWN member)
 
-| BTS Delay Code      | IOC Pillar | Airline Controllable |
-| ------------------- | ---------- | -------------------- |
-| CARRIER_DELAY       | Efficiency | Yes                  |
-| LATE_AIRCRAFT_DELAY | Efficiency | Yes                  |
-| WEATHER_DELAY       | Safety     | No                   |
-| NAS_DELAY           | Legality   | No                   |
-| SECURITY_DELAY      | Legality   | No                   |
-| NO_DELAY            | N/A        | No                   |
+**IOC Pillar Mapping (project-defined — not BTS classification):**
 
-**Sample data:**
+| delay_reason_key | delay_code    | ioc_pillar | influence_class     |
+| ---------------- | ------------- | ---------- | ------------------- |
+| 1                | CARRIER       | Efficiency | INTERNAL_ASSOCIATED |
+| 2                | WEATHER       | Safety     | EXTERNAL_ASSOCIATED |
+| 3                | NAS           | Legality   | EXTERNAL_ASSOCIATED |
+| 4                | SECURITY      | Legality   | EXTERNAL_ASSOCIATED |
+| 5                | LATE_AIRCRAFT | Efficiency | INTERNAL_ASSOCIATED |
+| -1               | UNKNOWN       | None       | UNKNOWN             |
 
-| reason_key | reason_code         | ioc_pillar | airline_controllable | description                                          |
-| ---------- | ------------------- | ---------- | -------------------- | ---------------------------------------------------- |
-| -1         | NO_DELAY            | N/A        | 0                    | Flight operated on time. arr_del15 = 0               |
-| 1          | CARRIER_DELAY       | Efficiency | 1                    | Airline ops: MEL fault, crew breach, GPU failure     |
-| 2          | WEATHER_DELAY       | Safety     | 0                    | IOC chose Safety over Efficiency — unsafe to operate |
-| 3          | NAS_DELAY           | Legality   | 0                    | ATC/regulatory constraint — airline had no control   |
-| 4          | SECURITY_DELAY      | Legality   | 0                    | Regulatory compliance — security screening delay     |
-| 5          | LATE_AIRCRAFT_DELAY | Efficiency | 1                    | Cascade: previous flight late, same aircraft delayed |
-
-**Note on ioc_pillar column:**
-
-> This column is unique to this project. No standard BTS
-> pipeline includes IOC pillar mapping. It exists because
-> domain knowledge from Peter J. Bruce (Chapter 1) was
-> applied directly to schema design. This enables queries
-> like "what % of delays are Safety-pillar driven vs
-> Efficiency-pillar driven?" — an insight no generic
-> analytics pipeline can produce.
+**Critical note:**
+ioc_pillar is PROJECT-DEFINED analytical taxonomy.
+Not an FAA classification. Not a BTS classification.
+Not a universal IOC standard. See ADR-006.
 
 ---
 
-### dim_aircraft (SCD Type 4)
+### dim_aircraft (Snapshot v1)
 
-**Current table — dim_aircraft (one row per tail number):**
+| Column            | Type      | Notes                                |
+| ----------------- | --------- | ------------------------------------ |
+| aircraft_key      | long      | Surrogate PK                         |
+| tail_number       | string    | Aircraft registration. Business key. |
+| record_type       | string    | SNAPSHOT_V1 or UNKNOWN_MEMBER        |
+| is_current        | boolean   | Always true in v1.                   |
+| gold_processed_ts | timestamp | Pipeline metadata                    |
 
-| Column         | Type    | Notes                                           |
-| -------------- | ------- | ----------------------------------------------- |
-| aircraft_key   | INT     | Surrogate PK (-1 = Unknown tail number)         |
-| tail_number    | VARCHAR | BTS TAIL_NUM. 6,570 NULLs in Q1 2024 → key = -1 |
-| aircraft_type  | VARCHAR | "B737", "A320", "B777" etc.                     |
-| manufacturer   | VARCHAR | "Boeing", "Airbus" etc.                         |
-| seat_config    | INT     | Approximate seat count                          |
-| effective_from | DATE    | When this configuration became active           |
-| is_current     | TINYINT | 1 = current configuration                       |
+**Rows:** 6,685 (6,684 real tail numbers + 1 UNKNOWN member)
+**UNKNOWN member:** aircraft_key = -1
+Handles 48,139 NULL tail number flights (0.23%).
 
-**History table — dim_aircraft_history:**
+**Key decision (ADR-007):**
+Keyed by tail_number ONLY — not carrier_code.
+Many-to-one relationship from fact_delays to dim_aircraft.
+A physical aircraft can appear under different operators.
+Including carrier creates join fan-out. See ADR-007.
 
-| Column         | Type    | Notes                          |
-| -------------- | ------- | ------------------------------ |
-| history_key    | INT     | Surrogate PK                   |
-| aircraft_key   | INT     | FK → dim_aircraft.aircraft_key |
-| tail_number    | VARCHAR | Tail number for this version   |
-| aircraft_type  | VARCHAR | Aircraft type for this version |
-| manufacturer   | VARCHAR | Manufacturer for this version  |
-| effective_from | DATE    | When this version started      |
-| effective_to   | DATE    | When this version ended        |
+**v1 limitation:**
+No aircraft type, age, or manufacturer data.
+Tail number only. FAA enrichment planned for v2.
 
-**Special record:**
+---
 
-> aircraft_key = -1, tail_number = "UNKNOWN"
-> Handles 6,570 NULL tail numbers in Q1 2024 BTS data.
-> These rows are preserved — never dropped.
-> NULL TAIL_NUM is expected for some BTS records.
+### bridge_flight_delay_reason
 
-**Why dim_aircraft matters:**
+| Column                      | Type      | Evidence  | Notes                                       |
+| --------------------------- | --------- | --------- | ------------------------------------------- |
+| flight_id                   | string    | OBSERVED  | FK → fact_delays.flight_id                  |
+| delay_reason_key            | integer   | OBSERVED  | FK → dim_delay_reason.delay_reason_key      |
+| delay_code                  | string    | OBSERVED  | Denormalized BTS delay code                 |
+| ioc_pillar                  | string    | DERIVED   | Denormalized from dim_delay_reason          |
+| operational_influence_class | string    | DERIVED   | Denormalized from dim_delay_reason          |
+| attributed_mins             | double    | OBSERVED  | Delay minutes for this cause on this flight |
+| attribution_pct             | double    | DERIVED   | attributed_mins / total for flight × 100    |
+| gold_processed_ts           | timestamp | TECHNICAL | Pipeline metadata                           |
 
-> Tracking TAIL_NUM across a single day reveals the
-> Late Aircraft cascade effect. Aircraft N131EV delayed
-> at 8am propagates through its 10am, 1pm, and 4pm
-> flights. This is the most powerful insight the Gold
-> layer can surface — and it requires dim_aircraft.
+**Rows:** 7,072,280 (verified GCG 10)
+**Grain:** One flight × one reported BTS delay reason
+
+**Why bridge table (ADR-002):**
+One flight can have multiple reported delay causes.
+Single FK in fact discards real information.
+Bridge preserves all causes without changing fact grain.
+
+**CRITICAL — double count rule:**
+Summing attributed_mins across multiple delay_codes
+for the same flight double-counts.
+Always filter by one delay_code or ioc_pillar
+when aggregating bridge delay minutes.
+
+---
+
+### model_cost_scenario
+
+| Column                | Type      | Evidence  | Notes                                     |
+| --------------------- | --------- | --------- | ----------------------------------------- |
+| cost_scenario_key     | integer   | MODELED   | Surrogate PK (=1 for default)             |
+| scenario_name         | string    | MODELED   | REFERENCE_45_USD                          |
+| cost_per_delay_minute | double    | MODELED   | $45.00 (Ferguson et al. FAA/NEXTOR 2010)  |
+| currency              | string    | MODELED   | USD                                       |
+| assumption_note       | string    | MODELED   | Source and limitations documented in data |
+| is_default            | boolean   | MODELED   | True for primary scenario                 |
+| gold_processed_ts     | timestamp | TECHNICAL | Pipeline metadata                         |
+
+**Rows:** 1
+**All values MODELED. See ADR-GOLD-005.**
+
+---
+
+### model_delay_cost
+
+| Column                | Type      | Evidence  | Notes                                      |
+| --------------------- | --------- | --------- | ------------------------------------------ |
+| flight_id             | string    | OBSERVED  | FK → fact_delays                           |
+| cost_scenario_key     | integer   | MODELED   | FK → model_cost_scenario                   |
+| scenario_name         | string    | MODELED   | Denormalized                               |
+| cost_per_delay_minute | double    | MODELED   | Denormalized assumption value              |
+| currency              | string    | MODELED   | USD                                        |
+| estimated_delay_cost  | double    | MODELED   | arr_delay_abs_mins × cost_per_delay_minute |
+| evidence_state        | string    | MODELED   | Literal "MODELED" stored in every row      |
+| gold_processed_ts     | timestamp | TECHNICAL | Pipeline metadata                          |
+
+**Rows:** 20,928,599
+**Formula:** arr_delay_abs_mins × $45
+**CRITICAL:** Never present estimated_delay_cost as
+actual or observed airline cost. Always MODELED.
 
 ---
 
 ## 7. NULL Handling Rules
 
-### 7.1 Confirmed NULL Statistics
+### 7.1 Confirmed NULL Statistics (verified August 1, 2026)
 
-> Source: Health check run August 1, 2026
-> Dataset: 20,928,599 rows across 36 files
-
-| Column              | NULLs Confirmed | NULL % | Status   |
-| ------------------- | --------------- | ------ | -------- |
-| YEAR                | 0               | 0.00%  | OK       |
-| MONTH               | 0               | 0.00%  | OK       |
-| DAY_OF_MONTH        | 0               | 0.00%  | OK       |
-| DAY_OF_WEEK         | 0               | 0.00%  | OK       |
-| FL_DATE             | 0               | 0.00%  | OK       |
-| OP_UNIQUE_CARRIER   | 0               | 0.00%  | OK       |
-| TAIL_NUM            | 48,139          | 0.23%  | LOW      |
-| OP_CARRIER_FL_NUM   | 1               | 0.00%  | LOW      |
-| ORIGIN              | 0               | 0.00%  | OK       |
-| ORIGIN_CITY_NAME    | 0               | 0.00%  | OK       |
-| ORIGIN_STATE_ABR    | 0               | 0.00%  | OK       |
-| DEST                | 0               | 0.00%  | OK       |
-| DEST_CITY_NAME      | 0               | 0.00%  | OK       |
-| DEST_STATE_ABR      | 0               | 0.00%  | OK       |
-| CRS_DEP_TIME        | 0               | 0.00%  | OK       |
-| DEP_TIME            | 275,298         | 1.32%  | CHECK    |
-| DEP_DELAY           | 276,090         | 1.32%  | CHECK    |
-| DEP_DELAY_NEW       | 276,090         | 1.32%  | CHECK    |
-| DEP_DEL15           | 276,090         | 1.32%  | CHECK    |
-| CRS_ARR_TIME        | 0               | 0.00%  | OK       |
-| ARR_TIME            | 292,084         | 1.40%  | CHECK    |
-| ARR_DELAY           | 340,445         | 1.63%  | CHECK    |
-| ARR_DELAY_NEW       | 340,445         | 1.63%  | CHECK    |
-| ARR_DEL15           | 340,445         | 1.63%  | CHECK    |
-| CANCELLED           | 0               | 0.00%  | OK       |
-| CANCELLATION_CODE   | 20,641,465      | 98.63% | EXPECTED |
-| DIVERTED            | 0               | 0.00%  | OK       |
-| CRS_ELAPSED_TIME    | 8               | 0.00%  | LOW      |
-| ACTUAL_ELAPSED_TIME | 340,445         | 1.63%  | CHECK    |
-| AIR_TIME            | 340,445         | 1.63%  | CHECK    |
-| FLIGHTS             | 0               | 0.00%  | OK       |
-| DISTANCE            | 0               | 0.00%  | OK       |
-| CARRIER_DELAY       | 16,557,293      | 79.11% | EXPECTED |
-| WEATHER_DELAY       | 16,557,293      | 79.11% | EXPECTED |
-| NAS_DELAY           | 16,557,293      | 79.11% | EXPECTED |
-| SECURITY_DELAY      | 16,557,293      | 79.11% | EXPECTED |
-| LATE_AIRCRAFT_DELAY | 16,557,293      | 79.11% | EXPECTED |
+| Column              | NULLs      | NULL % | Status   |
+| ------------------- | ---------- | ------ | -------- |
+| YEAR                | 0          | 0.00%  | OK       |
+| MONTH               | 0          | 0.00%  | OK       |
+| FL_DATE             | 0          | 0.00%  | OK       |
+| OP_UNIQUE_CARRIER   | 0          | 0.00%  | OK       |
+| TAIL_NUM            | 48,139     | 0.23%  | LOW      |
+| ORIGIN              | 0          | 0.00%  | OK       |
+| DEST                | 0          | 0.00%  | OK       |
+| ARR_DELAY           | 340,445    | 1.63%  | EXPECTED |
+| ARR_DEL15           | 340,445    | 1.63%  | EXPECTED |
+| CANCELLED           | 0          | 0.00%  | OK       |
+| CANCELLATION_CODE   | 20,641,465 | 98.63% | EXPECTED |
+| CARRIER_DELAY       | 16,557,293 | 79.11% | EXPECTED |
+| WEATHER_DELAY       | 16,557,293 | 79.11% | EXPECTED |
+| NAS_DELAY           | 16,557,293 | 79.11% | EXPECTED |
+| SECURITY_DELAY      | 16,557,293 | 79.11% | EXPECTED |
+| LATE_AIRCRAFT_DELAY | 16,557,293 | 79.11% | EXPECTED |
 
 ### 7.2 NULL Business Rules
 
-| Column              | NULL Meaning                   | Handling      | Rule                                |
-| ------------------- | ------------------------------ | ------------- | ----------------------------------- |
-| TAIL_NUM            | Not reported by airline        | Preserve NULL | Use aircraft_key = -1               |
-| OP_CARRIER_FL_NUM   | BTS reporting anomaly          | Preserve NULL | Do not drop row                     |
-| CRS_ELAPSED_TIME    | BTS reporting anomaly (8 rows) | Preserve NULL | Do not drop row                     |
-| DEP_TIME            | Flight was cancelled           | Preserve NULL | NULL when CANCELLED = 1             |
-| DEP_DELAY           | Cancelled + edge cases         | Preserve NULL | NULL when CANCELLED = 1             |
-| DEP_DELAY_NEW       | Cancelled + edge cases         | Preserve NULL | NULL when CANCELLED = 1             |
-| DEP_DEL15           | Cancelled + edge cases         | Preserve NULL | NULL when CANCELLED = 1             |
-| ARR_TIME            | Cancelled or diverted          | Preserve NULL | NULL when CANCELLED=1 or DIVERTED=1 |
-| ARR_DELAY           | Cancelled or diverted          | Preserve NULL | NULL when CANCELLED=1 or DIVERTED=1 |
-| ARR_DELAY_NEW       | Cancelled or diverted          | Preserve NULL | NULL when CANCELLED=1 or DIVERTED=1 |
-| ARR_DEL15           | Cancelled or diverted          | Preserve NULL | NULL when CANCELLED=1 or DIVERTED=1 |
-| ACTUAL_ELAPSED_TIME | Cancelled or diverted          | Preserve NULL | NULL when CANCELLED=1 or DIVERTED=1 |
-| AIR_TIME            | Cancelled or diverted          | Preserve NULL | NULL when CANCELLED=1 or DIVERTED=1 |
-| CANCELLATION_CODE   | Flight was NOT cancelled       | Preserve NULL | NULL when CANCELLED = 0             |
-| CARRIER_DELAY       | Flight on time (ARR_DEL15 = 0) | Preserve NULL | Must be NULL when ARR_DEL15 = 0     |
-| WEATHER_DELAY       | Flight on time (ARR_DEL15 = 0) | Preserve NULL | Must be NULL when ARR_DEL15 = 0     |
-| NAS_DELAY           | Flight on time (ARR_DEL15 = 0) | Preserve NULL | Must be NULL when ARR_DEL15 = 0     |
-| SECURITY_DELAY      | Flight on time (ARR_DEL15 = 0) | Preserve NULL | Must be NULL when ARR_DEL15 = 0     |
-| LATE_AIRCRAFT_DELAY | Flight on time (ARR_DEL15 = 0) | Preserve NULL | Must be NULL when ARR_DEL15 = 0     |
+| Column              | NULL Meaning            | Rule                                |
+| ------------------- | ----------------------- | ----------------------------------- |
+| TAIL_NUM            | Not reported by airline | aircraft_key = -1 (UNKNOWN member)  |
+| ARR_DELAY           | Cancelled or diverted   | NULL when CANCELLED=1 or DIVERTED=1 |
+| ARR_DEL15           | Cancelled or diverted   | NULL when CANCELLED=1 or DIVERTED=1 |
+| CANCELLATION_CODE   | Flight not cancelled    | NULL when CANCELLED = 0             |
+| CARRIER_DELAY       | Flight on time          | NULL when ARR_DEL15 = 0             |
+| WEATHER_DELAY       | Flight on time          | NULL when ARR_DEL15 = 0             |
+| NAS_DELAY           | Flight on time          | NULL when ARR_DEL15 = 0             |
+| SECURITY_DELAY      | Flight on time          | NULL when ARR_DEL15 = 0             |
+| LATE_AIRCRAFT_DELAY | Flight on time          | NULL when ARR_DEL15 = 0             |
 
 ### 7.3 Principle
 
 > NULL values are preserved whenever they carry business meaning.
-> They are never replaced with 0 or any substitute value.
+> Never replaced with 0 or any substitute value.
 > Every NULL in this dataset has a documented operational reason.
-
-## 8. Index Strategy
-
-Indexes are mandatory at 18M rows.
-Without indexes every dashboard query scans
-the full fact table. With indexes: milliseconds.
-
-| Table       | Index Columns            | Reason                            |
-| ----------- | ------------------------ | --------------------------------- |
-| fact_delays | carrier_key              | Filter/group by airline           |
-| fact_delays | origin_key               | Filter by departure airport       |
-| fact_delays | dest_key                 | Filter by arrival airport         |
-| fact_delays | date_key                 | Filter by time period             |
-| fact_delays | arr_del15                | Filter delayed vs on-time flights |
-| fact_delays | cancelled                | Filter cancelled flights          |
-| dim_carrier | carrier_code, is_current | Fast carrier lookup by code       |
-| dim_airport | airport_code, is_current | Fast airport lookup by code       |
+> See ADR-005.
 
 ---
 
-## 9. Partitioning Strategy
+## 8. Partitioning Strategy
 
-**Partition key:** year + month
+**Partition key:** flight_year + flight_month
 **Number of partitions:** 36 (Jan 2023 → Dec 2025)
-**Rows per partition:** ~500,000
-
-**Path structure:**
+**Rows per partition:** ~581,000 average
+**Format:** Parquet on ADLS Gen2
 
 **Why year + month (not day, not carrier):**
 
 | Option          | Partitions | Rows/partition | Decision      |
 | --------------- | ---------- | -------------- | ------------- |
-| By day          | 1,095      | ~18,000        | Too small     |
-| By year + month | 36         | ~500,000       | ✅ Correct    |
-| By carrier      | ~20        | ~900,000       | Hot-spot risk |
-| No partitioning | 1          | 18,000,000     | Too large     |
+| By day          | 1,095      | ~19,000        | Too small     |
+| By year + month | 36         | ~581,000       | ✅ Correct    |
+| By carrier      | ~15        | ~1,395,000     | Hot-spot risk |
+| No partitioning | 1          | 20,928,599     | Too large     |
 
-**Partition pruning benefit:**
+---
 
-> Query for January 2024 → scans only
-> year=2024/month=01/ partition (~500K rows).
-> Without partitioning → scans all 18M rows.
-> Estimated 30x query speedup on time-filtered queries.
+## 9. Gold Completion Gate Results
 
-**Idempotency connection:**
+All 10 checks passed on Azure Databricks — September 13, 2026.
 
-> DELETE partition + INSERT pattern in Silver and Gold
-> uses partition boundaries as the unit of reprocessing.
-> Reprocessing January 2024: delete year=2024/month=01/,
-> rerun transform, write clean partition.
-> Safe to retry. No duplicates. No data drift.
+| Check                         | Result | Value          |
+| ----------------------------- | ------ | -------------- |
+| GCG 01 — Artifacts exist      | PASS   | 9/9            |
+| GCG 02 — Row count            | PASS   | 20,928,599     |
+| GCG 03 — Grain uniqueness     | PASS   | 0 duplicates   |
+| GCG 04 — NULL foreign keys    | PASS   | 0 NULLs        |
+| GCG 05 — UNKNOWN members      | PASS   | All 5 dims     |
+| GCG 06 — Surrogate key unique | PASS   | All dims       |
+| GCG 07 — Partition count      | PASS   | 36/36          |
+| GCG 08 — arr_delay_mins       | PASS   | 152,637,336    |
+| GCG 09 — Cancellation count   | PASS   | 287,134        |
+| GCG 10 — Bridge integrity     | PASS   | 7,072,280 rows |
 
 ---
 
 ## 10. Modeling Decisions
 
-### Why surrogate keys?
+All major decisions documented in ADRs:
 
-Surrogate keys provide stable identifiers independent
-of source system changes. Carrier code "US" became "AA"
-after the American-US Airways merger. Surrogate keys
-isolate the warehouse from such changes. Joining on
-INT is also faster than VARCHAR at 18M row scale.
-
-### Why Kimball star schema over snowflake?
-
-The analytical workload is read-heavy. Dashboard queries
-aggregate by carrier, airport, time, and delay reason.
-Star schema provides simpler joins (one hop to each
-dimension) and better BI performance than snowflake
-(which adds extra joins for normalized sub-dimensions).
-Query patterns here are aggregations — not deep
-hierarchy traversal. Star wins.
-
-### Why monthly partitioning?
-
-BTS data is naturally organized by month (one CSV per
-month). Monthly partitions match the natural data
-boundary, enable partition pruning for time-filtered
-queries, and make idempotent reprocessing clean
-(delete one month, reprocess one month).
-
-### Why SCD Type 2 for carriers and airports?
-
-Historical accuracy requires knowing what the carrier
-or airport looked like at the time of the flight —
-not today. If American Airlines changes its hub from
-DFW to ORD, we need to know which hub was active for
-2023 flights vs 2025 flights. Type 2 preserves this.
-
-### Why dim_aircraft uses SCD Type 4?
-
-Tail numbers change configuration, get sold between
-airlines, and get reassigned. Type 2 would create
-many rows per tail number over time, making the
-dimension table large and joins expensive. Type 4
-keeps the current table lean (one row per aircraft)
-and moves history to a separate table queried only
-when needed.
-
-### Why ioc_pillar in dim_delay_reason?
-
-Domain knowledge from Chapter 1 of Airline Operations
-Control by Peter J. Bruce maps each delay cause to
-one of three IOC decision pillars: Safety, Legality,
-Efficiency. This enables analytical queries impossible
-in any standard BTS pipeline: "What proportion of
-delays are Safety-driven vs Efficiency-driven by
-carrier?" This column exists because we read before
-we built.
+- ADR-001: Surrogate key strategy
+- ADR-002: Star schema + bridge table
+- ADR-003: Snapshot dimensions — not SCD2
+- ADR-004: Airport domain columns — no invented data
+- ADR-005: NULL preservation policy
+- ADR-006: IOC pillar mapping — project-defined
+- ADR-007: Aircraft keyed by tail_number only
+- ADR-008: Column renaming BTS → business names
+- ADR-009: Parquet over CSV
+- ADR-010: FLIGHTS column dropped
 
 ---
 
-## 11. Current Assumptions
-
-## 11. Current Assumptions
-
-- One flight = one fact record (grain locked)
-- BTS delay definitions are treated as authoritative
-- Historical BTS files remain unchanged after publication
-- Cost calculations handled separately (not in data model)
-- Aircraft enrichment data sourced from public databases
-- dim_date populated for 2020-2030 and never updated
-- Row count confirmed: 20,928,599 (August 1, 2026)
-- TAIL_NUM NULLs: 48,139 (0.23%) — aircraft_key = -1
-- Delay cause NULL %: 79.1% confirmed across 3 years
-- ARR_DEL15 violations: 0 across full dataset
-- Duplicate flight records: 0 confirmed
-
----
-
-## 12. Future Evolution
-
-The following will be finalized during Gold layer implementation:
-
-- Surrogate key generation strategy (sequence vs hash)
-- Final referential integrity constraints
-- Physical storage optimization per layer
-- Full ER diagram with finalized relationships
-
-Major design decisions tracked through ADRs:
-
-- ADR-001: Why surrogate keys over natural keys
-- ADR-002: Why star schema over snowflake
-- ADR-003: Why SCD Type 2 for dim_carrier
-- ADR-004: Aviation domain columns in dim_airport
-- ADR-005: NULL preservation policy (80.1% pattern)
-- ADR-006: Why ioc_pillar in dim_delay_reason
-- ADR-007: Why SCD Type 4 for dim_aircraft
-
----
-
-> This document represents the current logical data model.
-> All significant modeling changes tracked through ADRs.
+> Version 1.0 — Azure Validated — September 2026
+> Gold layer complete: September 13, 2026
+> GCG: 10/10 PASSED
+> All decisions tracked through ADRs.
 > Every decision has a WHY. No decision is arbitrary.
