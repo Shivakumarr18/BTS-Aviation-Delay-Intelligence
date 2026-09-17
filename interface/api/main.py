@@ -93,6 +93,8 @@ TABLES:
 8. Always ROUND() floats to 2 decimal places
 9. For cost values: ROUND(SUM(estimated_delay_cost)/1000000000, 2) AS cost_billions_usd
 10. For delay rates: ROUND(100.0 * SUM(arr_delayed_flag) / COUNT(*), 2) AS delay_rate_pct
+10a.In interpretation text, always state the actual computed value, 
+never use placeholder text like XX.XX% or X.XX billion.
 11. NEVER return scientific notation. Always return human-readable numbers.
 12. Format large numbers with commas in interpretation text only.
 
