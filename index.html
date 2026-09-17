@@ -1,711 +1,933 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BTS Aviation Delay Intelligence System</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg: #0d1117;
-    --surface: #161b22;
-    --surface-2: #1c2330;
-    --border: #21262d;
-    --text: #e6edf3;
-    --text-muted: #7d8590;
-    --text-dim: #484f58;
-    --accent: #388bfd;
-    --accent-dim: #1f6feb;
-    --gold: #d29922;
-    --green: #3fb950;
-    --red: #f85149;
-    --orange: #db6d28;
-    --mono: 'JetBrains Mono', monospace;
-    --sans: 'Inter', sans-serif;
-  }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BTS Aviation Delay Intelligence System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0d1117;
+        --surface: #161b22;
+        --surface-2: #1c2330;
+        --border: #21262d;
+        --text: #e6edf3;
+        --text-muted: #7d8590;
+        --text-dim: #484f58;
+        --accent: #388bfd;
+        --accent-dim: #1f6feb;
+        --gold: #d29922;
+        --green: #3fb950;
+        --red: #f85149;
+        --orange: #db6d28;
+        --mono: "JetBrains Mono", monospace;
+        --sans: "Inter", sans-serif;
+      }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: 15px;
-    line-height: 1.6;
-  }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 15px;
+        line-height: 1.6;
+      }
 
-  /* NAV */
-  nav {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    background: rgba(13,17,23,0.92);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border);
-    padding: 0 2rem;
-    height: 56px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .nav-brand {
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--text-muted);
-    letter-spacing: 0.02em;
-  }
-  .nav-brand span { color: var(--accent); }
-  .nav-links {
-    display: flex;
-    gap: 1.5rem;
-    list-style: none;
-  }
-  .nav-links a {
-    color: var(--text-muted);
-    text-decoration: none;
-    font-size: 13px;
-    transition: color 0.15s;
-  }
-  .nav-links a:hover { color: var(--text); }
+      /* NAV */
+      nav {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: rgba(13, 17, 23, 0.92);
+        backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--border);
+        padding: 0 2rem;
+        height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .nav-brand {
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--text-muted);
+        letter-spacing: 0.02em;
+      }
+      .nav-brand span {
+        color: var(--accent);
+      }
+      .nav-links {
+        display: flex;
+        gap: 1.5rem;
+        list-style: none;
+      }
+      .nav-links a {
+        color: var(--text-muted);
+        text-decoration: none;
+        font-size: 13px;
+        transition: color 0.15s;
+      }
+      .nav-links a:hover {
+        color: var(--text);
+      }
 
-  /* HERO */
-  .hero {
-    padding: 6rem 2rem 4rem;
-    max-width: 900px;
-    margin: 0 auto;
-  }
-  .hero-tag {
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--accent);
-    letter-spacing: 0.08em;
-    margin-bottom: 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .hero-tag::before {
-    content: '';
-    display: block;
-    width: 24px;
-    height: 1px;
-    background: var(--accent);
-  }
-  .hero h1 {
-    font-size: clamp(2rem, 5vw, 3.2rem);
-    font-weight: 600;
-    line-height: 1.15;
-    letter-spacing: -0.02em;
-    margin-bottom: 1.5rem;
-  }
-  .hero h1 em {
-    font-style: normal;
-    color: var(--text-muted);
-  }
-  .hero-desc {
-    font-size: 17px;
-    color: var(--text-muted);
-    max-width: 600px;
-    margin-bottom: 2.5rem;
-    line-height: 1.7;
-  }
-  .hero-stats {
-    display: flex;
-    gap: 2.5rem;
-    flex-wrap: wrap;
-    margin-bottom: 3rem;
-  }
-  .stat { display: flex; flex-direction: column; gap: 2px; }
-  .stat-value {
-    font-family: var(--mono);
-    font-size: 22px;
-    font-weight: 500;
-    color: var(--text);
-  }
-  .stat-label {
-    font-size: 12px;
-    color: var(--text-dim);
-    letter-spacing: 0.03em;
-  }
-  .hero-actions {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-  .btn {
-    padding: 0.6rem 1.2rem;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    text-decoration: none;
-    transition: all 0.15s;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-  .btn-primary {
-    background: var(--accent);
-    color: #fff;
-    border: 1px solid var(--accent);
-  }
-  .btn-primary:hover { background: var(--accent-dim); }
-  .btn-secondary {
-    background: transparent;
-    color: var(--text);
-    border: 1px solid var(--border);
-  }
-  .btn-secondary:hover { border-color: var(--text-muted); }
+      /* HERO */
+      .hero {
+        padding: 6rem 2rem 4rem;
+        max-width: 900px;
+        margin: 0 auto;
+      }
+      .hero-tag {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--accent);
+        letter-spacing: 0.08em;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .hero-tag::before {
+        content: "";
+        display: block;
+        width: 24px;
+        height: 1px;
+        background: var(--accent);
+      }
+      .hero h1 {
+        font-size: clamp(2rem, 5vw, 3.2rem);
+        font-weight: 600;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        margin-bottom: 1.5rem;
+      }
+      .hero h1 em {
+        font-style: normal;
+        color: var(--text-muted);
+      }
+      .hero-desc {
+        font-size: 17px;
+        color: var(--text-muted);
+        max-width: 600px;
+        margin-bottom: 2.5rem;
+        line-height: 1.7;
+      }
+      .hero-stats {
+        display: flex;
+        gap: 2.5rem;
+        flex-wrap: wrap;
+        margin-bottom: 3rem;
+      }
+      .stat {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .stat-value {
+        font-family: var(--mono);
+        font-size: 22px;
+        font-weight: 500;
+        color: var(--text);
+      }
+      .stat-label {
+        font-size: 12px;
+        color: var(--text-dim);
+        letter-spacing: 0.03em;
+      }
+      .hero-actions {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+      .btn {
+        padding: 0.6rem 1.2rem;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+        transition: all 0.15s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: #fff;
+        border: 1px solid var(--accent);
+      }
+      .btn-primary:hover {
+        background: var(--accent-dim);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+      .btn-secondary:hover {
+        border-color: var(--text-muted);
+      }
 
-  /* PIPELINE */
-  .pipeline-section {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 4rem 2rem;
-    border-top: 1px solid var(--border);
-  }
-  .section-label {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text-dim);
-    letter-spacing: 0.1em;
-    margin-bottom: 2rem;
-  }
-  .pipeline {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
-    overflow-x: auto;
-    padding-bottom: 0.5rem;
-  }
-  .pipeline-stage {
-    flex: 1;
-    min-width: 140px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-right: none;
-    padding: 1.2rem 1rem;
-    position: relative;
-  }
-  .pipeline-stage:last-child { border-right: 1px solid var(--border); border-radius: 0 6px 6px 0; }
-  .pipeline-stage:first-child { border-radius: 6px 0 0 6px; }
-  .stage-name {
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--text-muted);
-    letter-spacing: 0.06em;
-    margin-bottom: 0.5rem;
-  }
-  .stage-rows {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 0.3rem;
-  }
-  .stage-detail { font-size: 11px; color: var(--text-dim); }
-  .stage-status {
-    font-size: 10px;
-    font-family: var(--mono);
-    margin-top: 0.8rem;
-    padding: 2px 6px;
-    border-radius: 3px;
-    display: inline-block;
-  }
-  .status-complete { background: rgba(63,185,80,0.12); color: var(--green); }
-  .status-planned { background: rgba(125,133,144,0.12); color: var(--text-dim); }
-  .pipeline-arrow {
-    display: flex;
-    align-items: center;
-    color: var(--text-dim);
-    font-size: 18px;
-    padding: 0 2px;
-    flex-shrink: 0;
-  }
+      /* PIPELINE */
+      .pipeline-section {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 4rem 2rem;
+        border-top: 1px solid var(--border);
+      }
+      .section-label {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--text-dim);
+        letter-spacing: 0.1em;
+        margin-bottom: 2rem;
+      }
+      .pipeline {
+        display: flex;
+        align-items: stretch;
+        gap: 0;
+        overflow-x: auto;
+        padding-bottom: 0.5rem;
+      }
+      .pipeline-stage {
+        flex: 1;
+        min-width: 140px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-right: none;
+        padding: 1.2rem 1rem;
+        position: relative;
+      }
+      .pipeline-stage:last-child {
+        border-right: 1px solid var(--border);
+        border-radius: 0 6px 6px 0;
+      }
+      .pipeline-stage:first-child {
+        border-radius: 6px 0 0 6px;
+      }
+      .stage-name {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-muted);
+        letter-spacing: 0.06em;
+        margin-bottom: 0.5rem;
+      }
+      .stage-rows {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 0.3rem;
+      }
+      .stage-detail {
+        font-size: 11px;
+        color: var(--text-dim);
+      }
+      .stage-status {
+        font-size: 10px;
+        font-family: var(--mono);
+        margin-top: 0.8rem;
+        padding: 2px 6px;
+        border-radius: 3px;
+        display: inline-block;
+      }
+      .status-complete {
+        background: rgba(63, 185, 80, 0.12);
+        color: var(--green);
+      }
+      .status-planned {
+        background: rgba(125, 133, 144, 0.12);
+        color: var(--text-dim);
+      }
+      .pipeline-arrow {
+        display: flex;
+        align-items: center;
+        color: var(--text-dim);
+        font-size: 18px;
+        padding: 0 2px;
+        flex-shrink: 0;
+      }
 
-  /* GATE RESULTS */
-  .gate-section {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 4rem 2rem;
-    border-top: 1px solid var(--border);
-  }
-  .gate-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 1px;
-    background: var(--border);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-    margin-top: 1.5rem;
-  }
-  .gate-item {
-    background: var(--surface);
-    padding: 1rem 1.2rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-  }
-  .gate-name { font-size: 13px; color: var(--text-muted); }
-  .gate-value {
-    font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--green);
-    white-space: nowrap;
-  }
-  .gate-value.highlight { color: var(--text); font-size: 14px; }
+      /* GATE RESULTS */
+      .gate-section {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 4rem 2rem;
+        border-top: 1px solid var(--border);
+      }
+      .gate-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 1px;
+        background: var(--border);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+        margin-top: 1.5rem;
+      }
+      .gate-item {
+        background: var(--surface);
+        padding: 1rem 1.2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+      }
+      .gate-name {
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+      .gate-value {
+        font-family: var(--mono);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--green);
+        white-space: nowrap;
+      }
+      .gate-value.highlight {
+        color: var(--text);
+        font-size: 14px;
+      }
 
-  /* DASHBOARD SECTION */
-  .dashboard-section {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 4rem 2rem;
-    border-top: 1px solid var(--border);
-  }
-  .dashboard-tabs {
-    display: flex;
-    gap: 0;
-    margin-bottom: 1.5rem;
-    border-bottom: 1px solid var(--border);
-    overflow-x: auto;
-  }
-  .tab-btn {
-    padding: 0.6rem 1rem;
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: var(--text-muted);
-    font-size: 13px;
-    cursor: pointer;
-    white-space: nowrap;
-    font-family: var(--sans);
-    transition: all 0.15s;
-    margin-bottom: -1px;
-  }
-  .tab-btn.active {
-    color: var(--text);
-    border-bottom-color: var(--accent);
-  }
-  .tab-btn:hover:not(.active) { color: var(--text); }
-  .dashboard-frame {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .dashboard-header {
-    padding: 0.8rem 1.2rem;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .dashboard-title { font-size: 13px; color: var(--text-muted); font-family: var(--mono); }
-  .dashboard-badge {
-    font-size: 11px;
-    font-family: var(--mono);
-    padding: 2px 8px;
-    border-radius: 3px;
-    background: rgba(56,139,253,0.12);
-    color: var(--accent);
-  }
-  .dashboard-img {
-    width: 100%;
-    display: none;
-    aspect-ratio: 16/9;
-    object-fit: cover;
-    object-position: top;
-  }
-  .dashboard-img.active { display: block; }
-  .dashboard-insight {
-    padding: 1rem 1.2rem;
-    border-top: 1px solid var(--border);
-    font-size: 13px;
-    color: var(--text-muted);
-    line-height: 1.6;
-  }
-  .dashboard-insight strong { color: var(--text); }
+      /* DASHBOARD SECTION */
+      .dashboard-section {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 4rem 2rem;
+        border-top: 1px solid var(--border);
+      }
+      .dashboard-tabs {
+        display: flex;
+        gap: 0;
+        margin-bottom: 1.5rem;
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+      }
+      .tab-btn {
+        padding: 0.6rem 1rem;
+        background: none;
+        border: none;
+        border-bottom: 2px solid transparent;
+        color: var(--text-muted);
+        font-size: 13px;
+        cursor: pointer;
+        white-space: nowrap;
+        font-family: var(--sans);
+        transition: all 0.15s;
+        margin-bottom: -1px;
+      }
+      .tab-btn.active {
+        color: var(--text);
+        border-bottom-color: var(--accent);
+      }
+      .tab-btn:hover:not(.active) {
+        color: var(--text);
+      }
+      .dashboard-frame {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .dashboard-header {
+        padding: 0.8rem 1.2rem;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .dashboard-title {
+        font-size: 13px;
+        color: var(--text-muted);
+        font-family: var(--mono);
+      }
+      .dashboard-badge {
+        font-size: 11px;
+        font-family: var(--mono);
+        padding: 2px 8px;
+        border-radius: 3px;
+        background: rgba(56, 139, 253, 0.12);
+        color: var(--accent);
+      }
+      .dashboard-img {
+        width: 100%;
+        display: none;
+        aspect-ratio: 16/9;
+        object-fit: cover;
+        object-position: top;
+      }
+      .dashboard-img.active {
+        display: block;
+      }
+      .dashboard-insight {
+        padding: 1rem 1.2rem;
+        border-top: 1px solid var(--border);
+        font-size: 13px;
+        color: var(--text-muted);
+        line-height: 1.6;
+      }
+      .dashboard-insight strong {
+        color: var(--text);
+      }
 
-  /* EVIDENCE */
-  .evidence-section {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 4rem 2rem;
-    border-top: 1px solid var(--border);
-  }
-  .evidence-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 1rem;
-    margin-top: 1.5rem;
-  }
-  .evidence-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 1rem;
-  }
-  .evidence-type {
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    padding: 2px 6px;
-    border-radius: 3px;
-    display: inline-block;
-    margin-bottom: 0.8rem;
-  }
-  .ev-observed { background: rgba(63,185,80,0.12); color: var(--green); }
-  .ev-derived { background: rgba(56,139,253,0.12); color: var(--accent); }
-  .ev-modeled { background: rgba(210,153,34,0.12); color: var(--gold); }
-  .ev-inferred { background: rgba(219,109,40,0.12); color: var(--orange); }
-  .evidence-title { font-size: 13px; color: var(--text); margin-bottom: 0.3rem; font-weight: 500; }
-  .evidence-desc { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+      /* EVIDENCE */
+      .evidence-section {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 4rem 2rem;
+        border-top: 1px solid var(--border);
+      }
+      .evidence-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 1.5rem;
+      }
+      .evidence-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 1rem;
+      }
+      .evidence-type {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        padding: 2px 6px;
+        border-radius: 3px;
+        display: inline-block;
+        margin-bottom: 0.8rem;
+      }
+      .ev-observed {
+        background: rgba(63, 185, 80, 0.12);
+        color: var(--green);
+      }
+      .ev-derived {
+        background: rgba(56, 139, 253, 0.12);
+        color: var(--accent);
+      }
+      .ev-modeled {
+        background: rgba(210, 153, 34, 0.12);
+        color: var(--gold);
+      }
+      .ev-inferred {
+        background: rgba(219, 109, 40, 0.12);
+        color: var(--orange);
+      }
+      .evidence-title {
+        font-size: 13px;
+        color: var(--text);
+        margin-bottom: 0.3rem;
+        font-weight: 500;
+      }
+      .evidence-desc {
+        font-size: 12px;
+        color: var(--text-dim);
+        line-height: 1.5;
+      }
 
-  /* INSIGHTS */
-  .insights-section {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 4rem 2rem;
-    border-top: 1px solid var(--border);
-  }
-  .insight-list { margin-top: 1.5rem; display: flex; flex-direction: column; gap: 1px; }
-  .insight-row {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    padding: 1rem 1.2rem;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 1rem;
-    align-items: center;
-  }
-  .insight-row:first-child { border-radius: 6px 6px 0 0; }
-  .insight-row:last-child { border-radius: 0 0 6px 6px; }
-  .insight-text { font-size: 14px; color: var(--text-muted); }
-  .insight-text strong { color: var(--text); }
-  .insight-tag {
-    font-family: var(--mono);
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 3px;
-    white-space: nowrap;
-  }
+      /* INSIGHTS */
+      .insights-section {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 4rem 2rem;
+        border-top: 1px solid var(--border);
+      }
+      .insight-list {
+        margin-top: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .insight-row {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        padding: 1rem 1.2rem;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 1rem;
+        align-items: center;
+      }
+      .insight-row:first-child {
+        border-radius: 6px 6px 0 0;
+      }
+      .insight-row:last-child {
+        border-radius: 0 0 6px 6px;
+      }
+      .insight-text {
+        font-size: 14px;
+        color: var(--text-muted);
+      }
+      .insight-text strong {
+        color: var(--text);
+      }
+      .insight-tag {
+        font-family: var(--mono);
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        white-space: nowrap;
+      }
 
-  /* FOOTER */
-  footer {
-    border-top: 1px solid var(--border);
-    padding: 3rem 2rem;
-    max-width: 900px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    flex-wrap: wrap;
-    gap: 2rem;
-  }
-  .footer-left { max-width: 400px; }
-  .footer-title {
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--text);
-    margin-bottom: 0.5rem;
-  }
-  .footer-desc { font-size: 13px; color: var(--text-dim); line-height: 1.6; }
-  .footer-links { display: flex; flex-direction: column; gap: 0.5rem; }
-  .footer-links a {
-    font-size: 13px;
-    color: var(--text-muted);
-    text-decoration: none;
-    transition: color 0.15s;
-  }
-  .footer-links a:hover { color: var(--accent); }
+      /* FOOTER */
+      footer {
+        border-top: 1px solid var(--border);
+        padding: 3rem 2rem;
+        max-width: 900px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 2rem;
+      }
+      .footer-left {
+        max-width: 400px;
+      }
+      .footer-title {
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--text);
+        margin-bottom: 0.5rem;
+      }
+      .footer-desc {
+        font-size: 13px;
+        color: var(--text-dim);
+        line-height: 1.6;
+      }
+      .footer-links {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .footer-links a {
+        font-size: 13px;
+        color: var(--text-muted);
+        text-decoration: none;
+        transition: color 0.15s;
+      }
+      .footer-links a:hover {
+        color: var(--accent);
+      }
 
-  @media (max-width: 600px) {
-    .hero-stats { gap: 1.5rem; }
-    .pipeline { flex-direction: column; }
-    .pipeline-stage { border-right: 1px solid var(--border); border-bottom: none; border-radius: 0; }
-    .pipeline-stage:first-child { border-radius: 6px 6px 0 0; }
-    .pipeline-stage:last-child { border-radius: 0 0 6px 6px; border-bottom: 1px solid var(--border); }
-    .pipeline-arrow { display: none; }
-    footer { flex-direction: column; }
-  }
-</style>
-</head>
-<body>
+      @media (max-width: 600px) {
+        .hero-stats {
+          gap: 1.5rem;
+        }
+        .pipeline {
+          flex-direction: column;
+        }
+        .pipeline-stage {
+          border-right: 1px solid var(--border);
+          border-bottom: none;
+          border-radius: 0;
+        }
+        .pipeline-stage:first-child {
+          border-radius: 6px 6px 0 0;
+        }
+        .pipeline-stage:last-child {
+          border-radius: 0 0 6px 6px;
+          border-bottom: 1px solid var(--border);
+        }
+        .pipeline-arrow {
+          display: none;
+        }
+        footer {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <div class="nav-brand">
+        ✈ <span>BTS</span> Aviation Delay Intelligence
+      </div>
+      <ul class="nav-links">
+        <li><a href="#pipeline">Pipeline</a></li>
+        <li><a href="#dashboards">Dashboards</a></li>
+        <li><a href="#insights">Insights</a></li>
+        <li>
+          <a
+            href="https://github.com/Shivakumarr18/BTS-Aviation-Delay-Intelligence"
+            target="_blank"
+            >GitHub</a
+          >
+        </li>
+      </ul>
+    </nav>
 
-<nav>
-  <div class="nav-brand">✈ <span>BTS</span> Aviation Delay Intelligence</div>
-  <ul class="nav-links">
-    <li><a href="#pipeline">Pipeline</a></li>
-    <li><a href="#dashboards">Dashboards</a></li>
-    <li><a href="#insights">Insights</a></li>
-    <li><a href="https://github.com/Shivakumarr18/BTS-Aviation-Delay-Intelligence" target="_blank">GitHub</a></li>
-  </ul>
-</nav>
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-tag">Data Engineering · Aviation Analytics · Azure</div>
+      <h1>
+        US Airline Delay Intelligence<br /><em
+          >Built on 20.9M flight records</em
+        >
+      </h1>
+      <p class="hero-desc">
+        A governed aviation data platform transforming 3 years of BTS TranStats
+        data into trusted analytical intelligence — with explicit evidence
+        boundaries on every metric.
+      </p>
+      <div class="hero-stats">
+        <div class="stat">
+          <span class="stat-value">20.9M</span>
+          <span class="stat-label">Flight records</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value">3 yrs</span>
+          <span class="stat-label">Jan 2023 – Dec 2025</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value">10/10</span>
+          <span class="stat-label">Gold completion gates</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value">$14.95B</span>
+          <span class="stat-label">Modeled delay exposure</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value">21.2%</span>
+          <span class="stat-label">Network delay rate</span>
+        </div>
+      </div>
+      <div class="hero-actions">
+        <a
+          href="https://github.com/Shivakumarr18/BTS-Aviation-Delay-Intelligence"
+          target="_blank"
+          class="btn btn-primary"
+          >View on GitHub</a
+        >
+        <a href="#dashboards" class="btn btn-secondary">See Dashboards</a>
+      </div>
+    </section>
 
-<!-- HERO -->
-<section class="hero">
-  <div class="hero-tag">Data Engineering · Aviation Analytics · Azure</div>
-  <h1>US Airline Delay Intelligence<br><em>Built on 20.9M flight records</em></h1>
-  <p class="hero-desc">
-    A governed aviation data platform transforming 3 years of BTS TranStats data into 
-    trusted analytical intelligence — with explicit evidence boundaries on every metric.
-  </p>
-  <div class="hero-stats">
-    <div class="stat">
-      <span class="stat-value">20.9M</span>
-      <span class="stat-label">Flight records</span>
-    </div>
-    <div class="stat">
-      <span class="stat-value">3 yrs</span>
-      <span class="stat-label">Jan 2023 – Dec 2025</span>
-    </div>
-    <div class="stat">
-      <span class="stat-value">10/10</span>
-      <span class="stat-label">Gold completion gates</span>
-    </div>
-    <div class="stat">
-      <span class="stat-value">$14.95B</span>
-      <span class="stat-label">Modeled delay exposure</span>
-    </div>
-    <div class="stat">
-      <span class="stat-value">21.2%</span>
-      <span class="stat-label">Network delay rate</span>
-    </div>
-  </div>
-  <div class="hero-actions">
-    <a href="https://github.com/Shivakumarr18/BTS-Aviation-Delay-Intelligence" target="_blank" class="btn btn-primary">View on GitHub</a>
-    <a href="#dashboards" class="btn btn-secondary">See Dashboards</a>
-  </div>
-</section>
+    <!-- PIPELINE -->
+    <section class="pipeline-section" id="pipeline">
+      <div class="section-label">MEDALLION ARCHITECTURE</div>
+      <div class="pipeline">
+        <div class="pipeline-stage">
+          <div class="stage-name">BRONZE</div>
+          <div class="stage-rows">20.9M</div>
+          <div class="stage-detail">36 partitions · Parquet · Immutable</div>
+          <div class="stage-status status-complete">✓ Complete</div>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-stage">
+          <div class="stage-name">SILVER</div>
+          <div class="stage-rows">20.9M</div>
+          <div class="stage-detail">12 validation gates · v4.0 Frozen</div>
+          <div class="stage-status status-complete">✓ Complete</div>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-stage">
+          <div class="stage-name">GOLD</div>
+          <div class="stage-rows">9 artifacts</div>
+          <div class="stage-detail">Kimball Star Schema · Azure</div>
+          <div class="stage-status status-complete">✓ Complete</div>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-stage">
+          <div class="stage-name">SEMANTIC</div>
+          <div class="stage-rows">v1.0</div>
+          <div class="stage-detail">
+            Evidence boundaries · Certified measures
+          </div>
+          <div class="stage-status status-complete">✓ Complete</div>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-stage">
+          <div class="stage-name">POWER BI</div>
+          <div class="stage-rows">5 pages</div>
+          <div class="stage-detail">Import mode · 20.9M rows</div>
+          <div class="stage-status status-complete">✓ Complete</div>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-stage">
+          <div class="stage-name">AI ANALYST</div>
+          <div class="stage-rows">Planned</div>
+          <div class="stage-detail">REST API · Intelligence layer</div>
+          <div class="stage-status status-planned">⊙ Planned</div>
+        </div>
+      </div>
+    </section>
 
-<!-- PIPELINE -->
-<section class="pipeline-section" id="pipeline">
-  <div class="section-label">MEDALLION ARCHITECTURE</div>
-  <div class="pipeline">
-    <div class="pipeline-stage">
-      <div class="stage-name">BRONZE</div>
-      <div class="stage-rows">20.9M</div>
-      <div class="stage-detail">36 partitions · Parquet · Immutable</div>
-      <div class="stage-status status-complete">✓ Complete</div>
-    </div>
-    <div class="pipeline-arrow">→</div>
-    <div class="pipeline-stage">
-      <div class="stage-name">SILVER</div>
-      <div class="stage-rows">20.9M</div>
-      <div class="stage-detail">12 validation gates · v4.0 Frozen</div>
-      <div class="stage-status status-complete">✓ Complete</div>
-    </div>
-    <div class="pipeline-arrow">→</div>
-    <div class="pipeline-stage">
-      <div class="stage-name">GOLD</div>
-      <div class="stage-rows">9 artifacts</div>
-      <div class="stage-detail">Kimball Star Schema · Azure</div>
-      <div class="stage-status status-complete">✓ Complete</div>
-    </div>
-    <div class="pipeline-arrow">→</div>
-    <div class="pipeline-stage">
-      <div class="stage-name">SEMANTIC</div>
-      <div class="stage-rows">v1.0</div>
-      <div class="stage-detail">Evidence boundaries · Certified measures</div>
-      <div class="stage-status status-complete">✓ Complete</div>
-    </div>
-    <div class="pipeline-arrow">→</div>
-    <div class="pipeline-stage">
-      <div class="stage-name">POWER BI</div>
-      <div class="stage-rows">5 pages</div>
-      <div class="stage-detail">Import mode · 20.9M rows</div>
-      <div class="stage-status status-complete">✓ Complete</div>
-    </div>
-    <div class="pipeline-arrow">→</div>
-    <div class="pipeline-stage">
-      <div class="stage-name">AI ANALYST</div>
-      <div class="stage-rows">Planned</div>
-      <div class="stage-detail">REST API · Intelligence layer</div>
-      <div class="stage-status status-planned">⊙ Planned</div>
-    </div>
-  </div>
-</section>
+    <!-- GOLD COMPLETION GATE -->
+    <section class="gate-section">
+      <div class="section-label">
+        GOLD COMPLETION GATE — AZURE DATABRICKS · SEP 13 2026
+      </div>
+      <div class="gate-grid">
+        <div class="gate-item">
+          <span class="gate-name">GCG 01 — Artifacts exist</span>
+          <span class="gate-value">9 / 9 ✓</span>
+        </div>
+        <div class="gate-item">
+          <span class="gate-name">GCG 02 — Row reconciliation</span>
+          <span class="gate-value highlight">20,928,599</span>
+        </div>
+        <div class="gate-item">
+          <span class="gate-name">GCG 03 — Grain uniqueness</span>
+          <span class="gate-value">0 duplicates</span>
+        </div>
+        <div class="gate-item">
+          <span class="gate-name">GCG 04 — NULL foreign keys</span>
+          <span class="gate-value">0 NULLs</span>
+        </div>
+        <div class="gate-item">
+          <span class="gate-name">GCG 05 — UNKNOWN members</span>
+          <span class="gate-value">All 5 dims ✓</span>
+        </div>
+        <div class="gate-item">
+          <span class="gate-name">GCG 06 — Surrogate key unique</span>
+          <span class="gate-value">All dims ✓</span>
+        </div>
+        <div class="gate-item">
+          <span class="gate-name">GCG 07 — Partition count</span>
+          <span class="gate-value">36 / 36 ✓</span>
+        </div>
+        <div class="gate-item">
+          <span class="gate-name">GCG 08 — Arrival delay mins</span>
+          <span class="gate-value highlight">152,637,336</span>
+        </div>
+        <div class="gate-item">
+          <span class="gate-name">GCG 09 — Cancellation count</span>
+          <span class="gate-value highlight">287,134</span>
+        </div>
+        <div class="gate-item">
+          <span class="gate-name">GCG 10 — Bridge integrity</span>
+          <span class="gate-value highlight">7,072,280</span>
+        </div>
+      </div>
+    </section>
 
-<!-- GOLD COMPLETION GATE -->
-<section class="gate-section">
-  <div class="section-label">GOLD COMPLETION GATE — AZURE DATABRICKS · SEP 13 2026</div>
-  <div class="gate-grid">
-    <div class="gate-item">
-      <span class="gate-name">GCG 01 — Artifacts exist</span>
-      <span class="gate-value">9 / 9 ✓</span>
-    </div>
-    <div class="gate-item">
-      <span class="gate-name">GCG 02 — Row reconciliation</span>
-      <span class="gate-value highlight">20,928,599</span>
-    </div>
-    <div class="gate-item">
-      <span class="gate-name">GCG 03 — Grain uniqueness</span>
-      <span class="gate-value">0 duplicates</span>
-    </div>
-    <div class="gate-item">
-      <span class="gate-name">GCG 04 — NULL foreign keys</span>
-      <span class="gate-value">0 NULLs</span>
-    </div>
-    <div class="gate-item">
-      <span class="gate-name">GCG 05 — UNKNOWN members</span>
-      <span class="gate-value">All 5 dims ✓</span>
-    </div>
-    <div class="gate-item">
-      <span class="gate-name">GCG 06 — Surrogate key unique</span>
-      <span class="gate-value">All dims ✓</span>
-    </div>
-    <div class="gate-item">
-      <span class="gate-name">GCG 07 — Partition count</span>
-      <span class="gate-value">36 / 36 ✓</span>
-    </div>
-    <div class="gate-item">
-      <span class="gate-name">GCG 08 — Arrival delay mins</span>
-      <span class="gate-value highlight">152,637,336</span>
-    </div>
-    <div class="gate-item">
-      <span class="gate-name">GCG 09 — Cancellation count</span>
-      <span class="gate-value highlight">287,134</span>
-    </div>
-    <div class="gate-item">
-      <span class="gate-name">GCG 10 — Bridge integrity</span>
-      <span class="gate-value highlight">7,072,280</span>
-    </div>
-  </div>
-</section>
+    <!-- DASHBOARDS -->
+    <section class="dashboard-section" id="dashboards">
+      <div class="section-label">POWER BI DASHBOARDS</div>
 
-<!-- DASHBOARDS -->
-<section class="dashboard-section" id="dashboards">
-  <div class="section-label">POWER BI DASHBOARDS</div>
+      <div class="dashboard-tabs">
+        <button class="tab-btn active" onclick="showTab(0)">
+          Operations Overview
+        </button>
+        <button class="tab-btn" onclick="showTab(1)">
+          Carrier Performance
+        </button>
+        <button class="tab-btn" onclick="showTab(2)">
+          Delay Cause Analysis
+        </button>
+        <button class="tab-btn" onclick="showTab(3)">Airport Exposure</button>
+        <button class="tab-btn" onclick="showTab(4)">Cost Sensitivity</button>
+      </div>
 
-  <div class="dashboard-tabs">
-    <button class="tab-btn active" onclick="showTab(0)">Operations Overview</button>
-    <button class="tab-btn" onclick="showTab(1)">Carrier Performance</button>
-    <button class="tab-btn" onclick="showTab(2)">Delay Cause Analysis</button>
-    <button class="tab-btn" onclick="showTab(3)">Airport Exposure</button>
-    <button class="tab-btn" onclick="showTab(4)">Cost Sensitivity</button>
-  </div>
+      <div class="dashboard-frame">
+        <div class="dashboard-header">
+          <span class="dashboard-title" id="dash-title"
+            >operations_overview.pbix</span
+          >
+          <span class="dashboard-badge">20.9M rows · Import mode</span>
+        </div>
 
-  <div class="dashboard-frame">
-    <div class="dashboard-header">
-      <span class="dashboard-title" id="dash-title">operations_overview.pbix</span>
-      <span class="dashboard-badge">20.9M rows · Import mode</span>
-    </div>
+        <img
+          class="dashboard-img active"
+          id="img-0"
+          src="tests/Reports/Screenshots/Operations_Overview.png"
+          alt="Operations Overview"
+        />
+        <img
+          class="dashboard-img"
+          id="img-1"
+          src="tests/Reports/Screenshots/Carrier_Performance.png"
+          alt="Carrier Performance"
+        />
+        <img
+          class="dashboard-img"
+          id="img-2"
+          src="tests/Reports/Screenshots/Delay_Cause_Analysis.png"
+          alt="Delay Cause Analysis"
+        />
+        <img
+          class="dashboard-img"
+          id="img-3"
+          src="tests/Reports/Screenshots/Aiport_Exposure.png"
+          alt="Airport Exposure"
+        />
+        <img
+          class="dashboard-img"
+          id="img-4"
+          src="tests/Reports/Screenshots/Modeled_delay_Cost.png"
+          alt="Cost Sensitivity"
+        />
 
-    <img class="dashboard-img active" id="img-0" src="tests/Screenshots/Operations_Overview.png" alt="Operations Overview">
-    <img class="dashboard-img" id="img-1" src="tests/Screenshots/Carrier_Performance.png" alt="Carrier Performance">
-    <img class="dashboard-img" id="img-2" src="tests/Screenshots/Delay_Cause_Analysis.png" alt="Delay Cause Analysis">
-    <img class="dashboard-img" id="img-3" src="tests/Screenshots/Aiport_Exposure.png" alt="Airport Exposure">
-    <img class="dashboard-img" id="img-4" src="tests/Screenshots/Modeled_delay_Cost.png" alt="Cost Sensitivity">
+        <div class="dashboard-insight" id="dash-insight">
+          <strong
+            >21M flights · 21.2% delay rate · 1.4% cancellation rate.</strong
+          >
+          American Airlines accumulates the most delay minutes despite fewer
+          flights than Southwest — delay intensity vs volume tells different
+          stories.
+        </div>
+      </div>
+    </section>
 
-    <div class="dashboard-insight" id="dash-insight">
-      <strong>21M flights · 21.2% delay rate · 1.4% cancellation rate.</strong> 
-      American Airlines accumulates the most delay minutes despite fewer flights than Southwest — delay intensity vs volume tells different stories.
-    </div>
-  </div>
-</section>
+    <!-- EVIDENCE FRAMEWORK -->
+    <section class="evidence-section">
+      <div class="section-label">EVIDENCE CLASSIFICATION FRAMEWORK</div>
+      <div class="evidence-grid">
+        <div class="evidence-card">
+          <span class="evidence-type ev-observed">OBSERVED</span>
+          <div class="evidence-title">Direct from BTS source</div>
+          <div class="evidence-desc">
+            arr_delay_mins, carrier_code, cancellation_code, weather_delay_mins
+          </div>
+        </div>
+        <div class="evidence-card">
+          <span class="evidence-type ev-derived">DERIVED</span>
+          <div class="evidence-title">Calculated from observed</div>
+          <div class="evidence-desc">
+            dominant_delay_pillar, operational_influence_class,
+            efficiency_attributed_mins
+          </div>
+        </div>
+        <div class="evidence-card">
+          <span class="evidence-type ev-modeled">MODELED</span>
+          <div class="evidence-title">External assumption applied</div>
+          <div class="evidence-desc">
+            estimated_delay_cost = arr_delay_mins × $45/min (Ferguson et al.
+            FAA/NEXTOR 2010)
+          </div>
+        </div>
+        <div class="evidence-card">
+          <span class="evidence-type ev-inferred">INFERRED</span>
+          <div class="evidence-title">Pattern interpretation</div>
+          <div class="evidence-desc">
+            Late aircraft as propagation indicator — sequence observed,
+            causation not proven
+          </div>
+        </div>
+      </div>
+    </section>
 
-<!-- EVIDENCE FRAMEWORK -->
-<section class="evidence-section">
-  <div class="section-label">EVIDENCE CLASSIFICATION FRAMEWORK</div>
-  <div class="evidence-grid">
-    <div class="evidence-card">
-      <span class="evidence-type ev-observed">OBSERVED</span>
-      <div class="evidence-title">Direct from BTS source</div>
-      <div class="evidence-desc">arr_delay_mins, carrier_code, cancellation_code, weather_delay_mins</div>
-    </div>
-    <div class="evidence-card">
-      <span class="evidence-type ev-derived">DERIVED</span>
-      <div class="evidence-title">Calculated from observed</div>
-      <div class="evidence-desc">dominant_delay_pillar, operational_influence_class, efficiency_attributed_mins</div>
-    </div>
-    <div class="evidence-card">
-      <span class="evidence-type ev-modeled">MODELED</span>
-      <div class="evidence-title">External assumption applied</div>
-      <div class="evidence-desc">estimated_delay_cost = arr_delay_mins × $45/min (Ferguson et al. FAA/NEXTOR 2010)</div>
-    </div>
-    <div class="evidence-card">
-      <span class="evidence-type ev-inferred">INFERRED</span>
-      <div class="evidence-title">Pattern interpretation</div>
-      <div class="evidence-desc">Late aircraft as propagation indicator — sequence observed, causation not proven</div>
-    </div>
-  </div>
-</section>
+    <!-- KEY INSIGHTS -->
+    <section class="insights-section" id="insights">
+      <div class="section-label">KEY ANALYTICAL FINDINGS</div>
+      <div class="insight-list">
+        <div class="insight-row">
+          <div class="insight-text">
+            <strong>Frontier Airlines</strong> had the highest delay rate at
+            29.23% — nearly 8 points above the network average of 21.2%.
+          </div>
+          <span class="insight-tag ev-observed">OBSERVED</span>
+        </div>
+        <div class="insight-row">
+          <div class="insight-text">
+            <strong>Late Aircraft</strong> is the #1 BTS-reported delay category
+            at 124M attributed minutes — larger than Carrier, NAS, Weather, and
+            Security combined.
+          </div>
+          <span class="insight-tag ev-observed">OBSERVED</span>
+        </div>
+        <div class="insight-row">
+          <div class="insight-text">
+            Delay rate worsened every year:
+            <strong>20.51% in 2023 → 20.77% in 2024 → 22.25% in 2025</strong>.
+            Consistent deterioration in on-time performance.
+          </div>
+          <span class="insight-tag ev-observed">OBSERVED</span>
+        </div>
+        <div class="insight-row">
+          <div class="insight-text">
+            <strong>MDW (Chicago Midway)</strong> had the highest total delay
+            minutes and cancellation count — Southwest's primary hub under
+            operational pressure.
+          </div>
+          <span class="insight-tag ev-inferred">INFERRED</span>
+        </div>
+        <div class="insight-row">
+          <div class="insight-text">
+            Using Ferguson et al. $45/min assumption, total modeled delay cost
+            exposure across 3 years is <strong>$14.95 billion</strong>.
+          </div>
+          <span class="insight-tag ev-modeled">MODELED</span>
+        </div>
+        <div class="insight-row">
+          <div class="insight-text">
+            <strong>Efficiency pillar</strong> (Carrier + Late Aircraft)
+            accounts for the dominant share of attributed delay minutes —
+            internal airline operations, not external factors.
+          </div>
+          <span class="insight-tag ev-derived">DERIVED</span>
+        </div>
+      </div>
+    </section>
 
-<!-- KEY INSIGHTS -->
-<section class="insights-section" id="insights">
-  <div class="section-label">KEY ANALYTICAL FINDINGS</div>
-  <div class="insight-list">
-    <div class="insight-row">
-      <div class="insight-text"><strong>Frontier Airlines</strong> had the highest delay rate at 29.23% — nearly 8 points above the network average of 21.2%.</div>
-      <span class="insight-tag ev-observed">OBSERVED</span>
-    </div>
-    <div class="insight-row">
-      <div class="insight-text"><strong>Late Aircraft</strong> is the #1 BTS-reported delay category at 124M attributed minutes — larger than Carrier, NAS, Weather, and Security combined.</div>
-      <span class="insight-tag ev-observed">OBSERVED</span>
-    </div>
-    <div class="insight-row">
-      <div class="insight-text">Delay rate worsened every year: <strong>20.51% in 2023 → 20.77% in 2024 → 22.25% in 2025</strong>. Consistent deterioration in on-time performance.</div>
-      <span class="insight-tag ev-observed">OBSERVED</span>
-    </div>
-    <div class="insight-row">
-      <div class="insight-text"><strong>MDW (Chicago Midway)</strong> had the highest total delay minutes and cancellation count — Southwest's primary hub under operational pressure.</div>
-      <span class="insight-tag ev-inferred">INFERRED</span>
-    </div>
-    <div class="insight-row">
-      <div class="insight-text">Using Ferguson et al. $45/min assumption, total modeled delay cost exposure across 3 years is <strong>$14.95 billion</strong>.</div>
-      <span class="insight-tag ev-modeled">MODELED</span>
-    </div>
-    <div class="insight-row">
-      <div class="insight-text"><strong>Efficiency pillar</strong> (Carrier + Late Aircraft) accounts for the dominant share of attributed delay minutes — internal airline operations, not external factors.</div>
-      <span class="insight-tag ev-derived">DERIVED</span>
-    </div>
-  </div>
-</section>
+    <!-- FOOTER -->
+    <footer>
+      <div class="footer-left">
+        <div class="footer-title">BTS Aviation Delay Intelligence System</div>
+        <div class="footer-desc">
+          Built by Narsing Shiva Kumar · Associate Engineer → Data Engineer<br />
+          Domain first. Code second. Evidence always.
+        </div>
+      </div>
+      <div class="footer-links">
+        <a
+          href="https://github.com/Shivakumarr18/BTS-Aviation-Delay-Intelligence"
+          target="_blank"
+          >GitHub Repository →</a
+        >
+        <a
+          href="https://github.com/Shivakumarr18/BTS-Aviation-Delay-Intelligence/blob/main/docs/semantic/BTS_SemanticLayer_v1_CodeVerified.docx"
+          target="_blank"
+          >Semantic Layer →</a
+        >
+        <a
+          href="https://github.com/Shivakumarr18/BTS-Aviation-Delay-Intelligence/tree/main/docs/decisions"
+          target="_blank"
+          >Architecture Decisions →</a
+        >
+        <a href="https://www.linkedin.com/in/shivakumarr18" target="_blank"
+          >LinkedIn →</a
+        >
+      </div>
+    </footer>
 
-<!-- FOOTER -->
-<footer>
-  <div class="footer-left">
-    <div class="footer-title">BTS Aviation Delay Intelligence System</div>
-    <div class="footer-desc">
-      Built by Narsing Shiva Kumar · Associate Engineer → Data Engineer<br>
-      Domain first. Code second. Evidence always.
-    </div>
-  </div>
-  <div class="footer-links">
-    <a href="https://github.com/Shivakumarr18/BTS-Aviation-Delay-Intelligence" target="_blank">GitHub Repository →</a>
-    <a href="https://github.com/Shivakumarr18/BTS-Aviation-Delay-Intelligence/blob/main/docs/semantic/BTS_SemanticLayer_v1_CodeVerified.docx" target="_blank">Semantic Layer →</a>
-    <a href="https://github.com/Shivakumarr18/BTS-Aviation-Delay-Intelligence/tree/main/docs/decisions" target="_blank">Architecture Decisions →</a>
-    <a href="https://www.linkedin.com/in/shivakumarr18" target="_blank">LinkedIn →</a>
-  </div>
-</footer>
+    <script>
+      const titles = [
+        "operations_overview",
+        "carrier_performance",
+        "delay_cause_analysis",
+        "airport_exposure",
+        "cost_sensitivity_estimated",
+      ];
+      const insights = [
+        "<strong>21M flights · 21.2% delay rate · 1.4% cancellation rate.</strong> American Airlines accumulates the most delay minutes despite fewer flights than Southwest — delay intensity vs volume tells different stories.",
+        '<strong>Frontier 29.23% · Republic highest cancellations · PSA highest avg delay.</strong> Three different definitions of "worst carrier" produce three different answers — metric definition matters before any ranking.',
+        "<strong>Late Aircraft is the #1 delay cause at 124M attributed minutes.</strong> The Efficiency pillar (Carrier + Late Aircraft) dominates — internal airline operations drive more delay than weather or ATC.",
+        "<strong>MDW (Chicago Midway) leads in both delay minutes and cancellations.</strong> Illinois has the highest delay rate by state. Airport-level patterns require operational context to interpret — labeled INFERRED.",
+        "<strong>$14.95B modeled delay cost exposure across 3 years.</strong> Based on $45/min assumption (Ferguson et al. FAA/NEXTOR 2010). This is a MODELED estimate — not actual airline financial loss.",
+      ];
 
-<script>
-const titles = [
-  'operations_overview',
-  'carrier_performance',
-  'delay_cause_analysis',
-  'airport_exposure',
-  'cost_sensitivity_estimated'
-];
-const insights = [
-  '<strong>21M flights · 21.2% delay rate · 1.4% cancellation rate.</strong> American Airlines accumulates the most delay minutes despite fewer flights than Southwest — delay intensity vs volume tells different stories.',
-  '<strong>Frontier 29.23% · Republic highest cancellations · PSA highest avg delay.</strong> Three different definitions of "worst carrier" produce three different answers — metric definition matters before any ranking.',
-  '<strong>Late Aircraft is the #1 delay cause at 124M attributed minutes.</strong> The Efficiency pillar (Carrier + Late Aircraft) dominates — internal airline operations drive more delay than weather or ATC.',
-  '<strong>MDW (Chicago Midway) leads in both delay minutes and cancellations.</strong> Illinois has the highest delay rate by state. Airport-level patterns require operational context to interpret — labeled INFERRED.',
-  '<strong>$14.95B modeled delay cost exposure across 3 years.</strong> Based on $45/min assumption (Ferguson et al. FAA/NEXTOR 2010). This is a MODELED estimate — not actual airline financial loss.'
-];
-
-function showTab(idx) {
-  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===idx));
-  document.querySelectorAll('.dashboard-img').forEach((img,i) => img.classList.toggle('active', i===idx));
-  document.getElementById('dash-title').textContent = titles[idx] + '.pbix';
-  document.getElementById('dash-insight').innerHTML = insights[idx];
-}
-</script>
-
-</body>
+      function showTab(idx) {
+        document
+          .querySelectorAll(".tab-btn")
+          .forEach((b, i) => b.classList.toggle("active", i === idx));
+        document
+          .querySelectorAll(".dashboard-img")
+          .forEach((img, i) => img.classList.toggle("active", i === idx));
+        document.getElementById("dash-title").textContent =
+          titles[idx] + ".pbix";
+        document.getElementById("dash-insight").innerHTML = insights[idx];
+      }
+    </script>
+  </body>
 </html>
