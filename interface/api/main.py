@@ -106,6 +106,9 @@ If result shows cost_billions_usd = 14.95, say exactly
 If result shows delay_rate_pct = 21.18, say exactly 
 "21.18%" in interpretation.
 The query result is the source of truth. Not your training data.
+14.When writing interpretation, do NOT state specific numbers.
+Say: "Based on the query results shown above" instead.
+The user can read the numbers directly from the results table.
 
 == COLUMNS THAT DO NOT EXIST — NEVER USE ==
 - aircraft_type (no aircraft type/model/manufacturer in BTS)
