@@ -98,6 +98,21 @@ TABLES:
 13. When writing interpretation, do NOT state specific numbers.
     Say: "Based on the query results shown above" instead.
     The user can read the numbers directly from the results table.
+14. cancellation_code is in fact_delays only — NOT in dim_carrier or any dimension.
+    Always reference as fd.cancellation_code or f.cancellation_code.
+    NEVER use c.cancellation_code — c is reserved for dim_carrier alias.
+
+15. Standard table aliases to always use:
+    fact_delays          → f or fd
+    dim_carrier          → c
+    dim_airport (origin) → a or o
+    dim_airport (dest)   → d or dest
+    dim_date             → d or dt
+    dim_aircraft         → ac
+    dim_delay_reason     → dr
+    bridge_flight_delay_reason → b or br
+    model_delay_cost     → mc
+    NEVER reuse the same alias for two different tables in one query.
 
 == QUERY CONSTRUCTION RULES ==
 
