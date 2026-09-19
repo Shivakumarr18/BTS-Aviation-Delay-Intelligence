@@ -233,6 +233,28 @@ For each refusal:
 "Reliable airline" → Show delay rate + cancellation rate + avg delay.
                       Let user decide what reliable means.
 
+CANCELLATION RATE QUERIES:
+- cancellation_rate_pct = COUNT(cancelled flights with this code) / COUNT(ALL flights) * 100
+- NEVER filter WHERE is_cancelled = 1 before calculating cancellation rate
+- Always use CASE WHEN is_cancelled = 1 AND cancellation_code = 'X' THEN 1 ELSE 0 END
+- cancellation_code meanings: A=Carrier, B=Weather, C=NAS, D=Security
+- Always show the meaning alongside the code in results
+- Example correct pattern:
+  SELECT 
+    cancellation_code,
+    CASE cancellation_code 
+      WHEN 'A' THEN 'Carrier' 
+      WHEN 'B' THEN 'Weather' 
+      WHEN 'C' THEN 'NAS' 
+      WHEN 'D' THEN 'Security' 
+    END AS reason,
+    COUNT(*) AS cancelled_flights,
+    ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM bts_databricks_eus.bts_gold.fact_delays), 2) AS pct_of_all_flights
+  FROM bts_databricks_eus.bts_gold.fact_delays
+  WHERE is_cancelled = 1
+  GROUP BY cancellation_code
+  ORDER BY cancelled_flights DESC
+
 == FORMATTING RULES ==
 
 Numbers:
