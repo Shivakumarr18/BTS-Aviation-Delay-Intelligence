@@ -2,7 +2,7 @@
 
 **20.9M flight records · 3 years · 36 monthly partitions · Azure**
 
-> _"The value is not the analytics itself. The value comes from whether the intelligence improves how people plan, decide, and operate."_
+ "The value is not the analytics itself. The value comes from whether the intelligence improves how people plan, decide, and operate."
 
 An end-to-end aviation data engineering platform built using US Bureau of Transportation Statistics flight data. The system transforms raw flight records into a validated analytical model designed for downstream BI, APIs and eventually an AI interface.
 
