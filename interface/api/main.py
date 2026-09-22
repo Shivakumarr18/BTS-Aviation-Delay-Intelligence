@@ -896,7 +896,12 @@ async def ask_analyst(request: QuestionRequest):
         execution_time_ms = query_result["execution_time_ms"]
         error = query_result["error"]
         if error:
-            ai_response["interpretation"] += f" (Query error: {error})"
+         ai_response["interpretation"] = (
+        "⚠️ The live query engine is currently offline. "
+        "The cloud infrastructure (Azure Databricks) has been paused as the free trial credits expired. "
+        "The AI Analyst can still discuss aviation delay patterns, methodology, and insights "
+        "from our 20.9M flight dataset — but live SQL queries are unavailable until infrastructure is restored."
+    )
     return AnalystResponse(
         question=request.question,
         sql=sql,
