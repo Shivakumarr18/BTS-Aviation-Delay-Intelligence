@@ -4,7 +4,7 @@
 
  "The value is not the analytics itself. The value comes from whether the intelligence improves how people plan, decide, and operate."
 
-An end-to-end aviation data engineering platform built using US Bureau of Transportation Statistics flight data. The system transforms raw flight records into a validated analytical model designed for downstream BI, APIs and eventually an AI interface...
+An end-to-end aviation data engineering platform built using US Bureau of Transportation Statistics flight data. The system transforms raw flight records into a validated analytical model designed for downstream BI, APIs and eventually an AI interface..
 
 [![GitHub](https://img.shields.io/badge/GitHub-Shivakumarr18-181717?style=flat&logo=github)](https://github.com/Shivakumarr18)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-0A66C2?style=flat&logo=linkedin)](https://www.linkedin.com/)
